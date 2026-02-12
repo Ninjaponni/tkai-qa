@@ -303,6 +303,9 @@ function initSwipeHandlers() {
       }
       isDragging = false;
 
+      // Remove inline transition so CSS class can take over
+      card.style.transition = '';
+
       const damped = currentX * 0.55;
 
       if (Math.abs(damped) >= THRESHOLD) {
@@ -320,7 +323,7 @@ function initSwipeHandlers() {
           card.style.transform = 'translateX(0)';
           bgEdit.style.opacity = 0;
           editingQuestionId = qId;
-          renderQuestions(lastQuestions);
+          setTimeout(() => renderQuestions(lastQuestions), 450);
         }
       } else {
         // Snap back with spring
