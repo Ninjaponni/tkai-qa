@@ -1,2 +1,4 @@
 node_modules/
 tkai.db
+tkai.db-shm
+tkai.db-wal
