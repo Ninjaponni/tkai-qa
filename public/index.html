@@ -78,17 +78,32 @@
     const imagePlaceholder = document.getElementById('image-placeholder');
     let speakerImageBase64 = null;
 
+    // Resize image to max 256x256 before upload
+    function resizeImage(file, maxSize) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          if (w > h) { if (w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; } }
+          else { if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; } }
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
     // Image upload preview
-    imageInput.addEventListener('change', (e) => {
+    imageInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        speakerImageBase64 = ev.target.result;
-        imagePreview.innerHTML = `<img src="${ev.target.result}" alt="Preview">`;
-      };
-      reader.readAsDataURL(file);
+      const resized = await resizeImage(file, 256);
+      speakerImageBase64 = resized;
+      imagePreview.innerHTML = `<img src="${resized}" alt="Preview">`;
     });
 
     form.addEventListener('submit', async (e) => {
