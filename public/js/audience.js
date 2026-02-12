@@ -318,12 +318,11 @@ function initSwipeHandlers() {
             socket.emit('delete-own-question', { slug, questionId: qId, nickname });
           }, 300);
         } else {
-          // Edit
-          card.classList.add('snapping');
-          card.style.transform = 'translateX(0)';
-          bgEdit.style.opacity = 0;
+          // Edit — slide off to the right, then show edit mode
+          card.classList.add('swiped-away');
+          card.style.transform = `translateX(${window.innerWidth}px)`;
           editingQuestionId = qId;
-          setTimeout(() => renderQuestions(lastQuestions), 450);
+          setTimeout(() => renderQuestions(lastQuestions), 300);
         }
       } else {
         // Snap back with spring
