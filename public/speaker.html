@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
 </head>
 <body class="speaker-body">
+  <canvas id="particles-canvas"></canvas>
   <div class="container">
     <header id="session-header">
       <div class="header-row">
@@ -18,7 +19,7 @@
             <span class="speaker-name" id="speaker-name"></span>
           </div>
         </div>
-        <span class="badge badge-speaker">Foredragsholder</span>
+        <span class="badge-label">Foredragsholder</span>
       </div>
     </header>
 
@@ -28,7 +29,7 @@
         <canvas id="qr-canvas"></canvas>
         <p class="qr-label">Skann for å stille spørsmål</p>
       </div>
-      <button class="btn btn-secondary" onclick="document.getElementById('qr-card').style.display='none'">Skjul QR-kode</button>
+      <button class="btn btn-primary" onclick="toggleQR(false)">Skjul QR-kode</button>
     </section>
 
     <section id="focus-overlay" class="focus-overlay" style="display:none;">
@@ -45,7 +46,7 @@
     <section id="questions-section">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
         <h2>Spørsmål <span class="question-count" id="question-count">(0)</span></h2>
-        <button class="btn btn-small" onclick="document.getElementById('qr-card').style.display='block'">Vis QR-kode</button>
+        <button class="btn btn-small" id="show-qr-btn" onclick="toggleQR(true)">Vis QR-kode</button>
       </div>
 
       <div class="filter-bar">
@@ -62,6 +63,13 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/particles.js"></script>
   <script src="/js/speaker.js"></script>
+  <script>
+    function toggleQR(show) {
+      document.getElementById('qr-card').style.display = show ? 'block' : 'none';
+      document.getElementById('show-qr-btn').style.display = show ? 'none' : '';
+    }
+  </script>
 </body>
 </html>

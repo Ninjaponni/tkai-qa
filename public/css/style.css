@@ -32,9 +32,20 @@ body {
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
+  position: relative;
+}
+
+/* === Particles Canvas === */
+#particles-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .container {
+  position: relative;
+  z-index: 1;
   max-width: 640px;
   margin: 0 auto;
   padding: 16px;
@@ -98,18 +109,18 @@ header#session-header h1 {
   gap: 12px;
 }
 
-.badge {
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 4px 12px;
-  border-radius: 20px;
+/* Badge-label: non-interactive label (not a button) */
+.badge-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 4px;
   white-space: nowrap;
-  letter-spacing: 0.3px;
-}
-
-.badge-speaker {
-  background: var(--accent);
-  color: #fff;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  background: none;
 }
 
 /* === Cards === */
@@ -235,11 +246,11 @@ textarea {
   cursor: pointer;
   text-decoration: none;
   text-align: center;
-  transition: background 0.2s, transform 0.1s;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
 }
 
 .btn:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .btn-primary {
@@ -249,6 +260,7 @@ textarea {
 
 .btn-primary:hover {
   background: #5a4bd6;
+  box-shadow: 0 0 16px rgba(108, 92, 231, 0.25);
 }
 
 .btn-secondary {
@@ -270,6 +282,11 @@ textarea {
   border: none;
   font-family: inherit;
   cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.btn-small:active {
+  transform: scale(0.96);
 }
 
 .btn-text {
@@ -365,7 +382,7 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .question-card.slide-in {
@@ -378,7 +395,7 @@ textarea {
 }
 
 .question-card.question-answered {
-  opacity: 0.6;
+  opacity: 0.5;
   background: var(--answered-bg);
   border-color: var(--success);
   border-style: dashed;
@@ -474,6 +491,7 @@ textarea {
   color: var(--success);
   background: var(--success-dim);
   cursor: default;
+  animation: upvoteBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .upvote-icon {
@@ -513,6 +531,10 @@ textarea {
   cursor: pointer;
   transition: all 0.2s;
   font-family: inherit;
+}
+
+.btn-action:active {
+  transform: scale(0.94);
 }
 
 .btn-focus {
@@ -641,7 +663,7 @@ textarea {
   justify-content: center;
   z-index: 100;
   padding: 32px;
-  animation: fadeIn 0.3s ease;
+  animation: fadeIn 0.4s ease;
 }
 
 .focus-content {
@@ -657,16 +679,29 @@ textarea {
   color: var(--text);
 }
 
+/* Typewriter cursor for focus mode */
+.focus-question-text .typewriter-cursor {
+  display: inline-block;
+  width: 3px;
+  height: 1em;
+  background: var(--accent-light);
+  margin-left: 4px;
+  animation: blink 0.7s step-end infinite;
+  vertical-align: text-bottom;
+}
+
 .focus-meta {
   font-size: 1.2rem;
   color: var(--text-muted);
   margin-bottom: 40px;
+  animation: fadeIn 0.6s ease 0.3s both;
 }
 
 .focus-actions {
   display: flex;
   gap: 12px;
   justify-content: center;
+  animation: fadeIn 0.6s ease 0.5s both;
 }
 
 /* === Focused Banner (Audience) === */
@@ -742,9 +777,21 @@ textarea {
   }
 }
 
+@keyframes upvoteBounce {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.2) translateY(-4px); }
+  50% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0.3); }
   50% { box-shadow: 0 0 0 8px rgba(108, 92, 231, 0); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 /* === Desktop/Projector === */

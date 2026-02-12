@@ -235,9 +235,30 @@ socket.on('questions-updated', (data) => {
 socket.on('question-focused', (question) => {
   focusedQuestionId = question.id;
   focusOverlay.style.display = 'flex';
-  focusQuestionText.textContent = question.text;
   focusMeta.textContent = `${question.nickname} · ▲ ${question.upvotes}`;
+  typewriter(focusQuestionText, question.text, 30);
 });
+
+// Typewriter effect
+function typewriter(el, text, speed) {
+  el.innerHTML = '';
+  let i = 0;
+  const cursor = document.createElement('span');
+  cursor.className = 'typewriter-cursor';
+  el.appendChild(cursor);
+
+  function type() {
+    if (i < text.length) {
+      el.insertBefore(document.createTextNode(text[i]), cursor);
+      i++;
+      setTimeout(type, speed);
+    } else {
+      // Remove cursor after a short delay
+      setTimeout(() => cursor.remove(), 1500);
+    }
+  }
+  type();
+}
 
 socket.on('question-unfocused', () => {
   focusedQuestionId = null;
