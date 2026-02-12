@@ -1,0 +1,16 @@
+{
+  "name": "tkai-qa",
+  "version": "1.0.0",
+  "description": "Enkel Q&A-tjeneste for meetup-events",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bad-words": "^3.0.4",
+    "better-sqlite3": "^11.7.0",
+    "express": "^4.21.1",
+    "socket.io": "^4.8.1",
+    "uuid": "^11.0.3"
+  }
+}

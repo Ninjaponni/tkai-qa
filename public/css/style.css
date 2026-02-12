@@ -1,0 +1,620 @@
+/* === Reset & Base === */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface-hover: #222633;
+  --border: #2a2e3d;
+  --text: #e4e6ed;
+  --text-muted: #8b8fa3;
+  --accent: #6c5ce7;
+  --accent-light: #a29bfe;
+  --success: #00b894;
+  --warning: #fdcb6e;
+  --danger: #e17055;
+  --focus-bg: #1e1040;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* === Hero / Header === */
+.hero {
+  text-align: center;
+  padding: 48px 0 32px;
+}
+
+.hero h1 {
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.accent {
+  color: var(--accent-light);
+}
+
+.tagline {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  margin-top: 8px;
+}
+
+header#session-header {
+  padding: 24px 0 16px;
+}
+
+header#session-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.speaker-name {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.badge-speaker {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* === Cards === */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.card h2 {
+  font-size: 1.2rem;
+  margin-bottom: 16px;
+}
+
+/* === Forms === */
+label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+input[type="text"],
+textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+  font-family: inherit;
+  margin-bottom: 16px;
+  transition: border-color 0.2s;
+}
+
+input[type="text"]:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.char-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* === Buttons === */
+.btn {
+  display: inline-block;
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #5a4bd6;
+}
+
+.btn-secondary {
+  background: var(--surface-hover);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.btn-small {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius-sm);
+}
+
+.btn-text {
+  background: none;
+  color: var(--text-muted);
+  padding: 8px 0;
+  font-size: 0.9rem;
+  margin-top: 12px;
+}
+
+.btn-text:hover {
+  color: var(--text);
+}
+
+.btn-large {
+  padding: 14px 32px;
+  font-size: 1.1rem;
+}
+
+/* === Links section === */
+.session-title {
+  color: var(--accent-light);
+  font-size: 1.05rem;
+  margin-bottom: 20px;
+}
+
+.link-group {
+  margin-bottom: 16px;
+}
+
+.link-group label {
+  font-size: 0.85rem;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.link-box {
+  display: flex;
+  gap: 8px;
+}
+
+.link-box input {
+  flex: 1;
+  margin-bottom: 0;
+  font-size: 0.85rem;
+}
+
+.link-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.link-actions a {
+  flex: 1;
+}
+
+/* === Questions List === */
+.questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.question-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  animation: fadeIn 0.3s ease;
+}
+
+.question-card.question-focused {
+  border-color: var(--accent);
+  background: var(--focus-bg);
+}
+
+.question-card.question-hidden {
+  opacity: 0.5;
+}
+
+.question-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.question-text {
+  font-size: 1rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.question-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.question-nickname {
+  font-weight: 600;
+  color: var(--accent-light);
+}
+
+.upvote-count-inline {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.question-count {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px 0;
+  font-size: 1rem;
+}
+
+/* === Upvote Button === */
+.upvote-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 48px;
+  flex-shrink: 0;
+}
+
+.upvote-btn:hover:not(.upvoted) {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.upvote-btn.upvoted {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(0, 184, 148, 0.1);
+  cursor: default;
+}
+
+.upvote-icon {
+  font-size: 0.85rem;
+}
+
+.upvote-count {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+/* === Speaker Actions === */
+.speaker-card {
+  flex-wrap: wrap;
+}
+
+.question-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-action {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-focus {
+  border-color: var(--accent);
+  color: var(--accent-light);
+}
+
+.btn-focus:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-unfocus {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-hide {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.btn-hide:hover {
+  background: var(--warning);
+  color: var(--bg);
+}
+
+.btn-restore {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.btn-restore:hover {
+  background: var(--success);
+  color: #fff;
+}
+
+.btn-delete {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-delete:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* === Status Badges === */
+.status-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-active {
+  background: rgba(0, 184, 148, 0.15);
+  color: var(--success);
+}
+
+.status-focused {
+  background: rgba(108, 92, 231, 0.2);
+  color: var(--accent-light);
+}
+
+.status-hidden {
+  background: rgba(253, 203, 110, 0.15);
+  color: var(--warning);
+}
+
+/* === Filter Bar === */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.btn-filter {
+  padding: 6px 16px;
+  font-size: 0.85rem;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-filter.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.btn-filter:hover:not(.active) {
+  border-color: var(--accent);
+  color: var(--accent-light);
+}
+
+/* === Focus Overlay (Speaker) === */
+.focus-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 32px;
+}
+
+.focus-content {
+  text-align: center;
+  max-width: 900px;
+}
+
+.focus-question-text {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 24px;
+  color: var(--text);
+}
+
+.focus-meta {
+  font-size: 1.2rem;
+  color: var(--text-muted);
+  margin-bottom: 40px;
+}
+
+/* === Focused Banner (Audience) === */
+.focused-banner {
+  background: var(--focus-bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 20px;
+  text-align: center;
+  animation: pulse 2s infinite;
+}
+
+.focused-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--accent-light);
+  margin-bottom: 8px;
+}
+
+.focused-text {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.focused-author {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* === Nickname & Error === */
+.nickname-display {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 12px;
+}
+
+.nickname-display strong {
+  color: var(--accent-light);
+}
+
+.error-message {
+  color: var(--danger);
+  font-size: 0.9rem;
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(225, 112, 85, 0.1);
+  border-radius: var(--radius-sm);
+}
+
+.question-form-card {
+  margin-bottom: 20px;
+}
+
+/* === Animations === */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(108, 92, 231, 0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease;
+}
+
+/* === Desktop/Projector === */
+@media (min-width: 768px) {
+  .container {
+    padding: 24px;
+  }
+
+  .hero {
+    padding: 64px 0 40px;
+  }
+
+  .hero h1 {
+    font-size: 3rem;
+  }
+
+  .question-actions {
+    flex-shrink: 0;
+  }
+
+  .speaker-card {
+    flex-wrap: nowrap;
+  }
+}
+
+/* Speaker body - wider container for projector use */
+.speaker-body .container {
+  max-width: 900px;
+}

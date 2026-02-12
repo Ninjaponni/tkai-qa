@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TKAI QA – Spørsmål</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="container">
+    <header id="session-header">
+      <h1 id="session-title">Laster...</h1>
+      <p class="speaker-name" id="speaker-name"></p>
+    </header>
+
+    <section class="card question-form-card">
+      <form id="question-form">
+        <label for="question-text">Still et spørsmål</label>
+        <textarea id="question-text" placeholder="Skriv spørsmålet ditt her..." maxlength="500" rows="3"></textarea>
+        <div class="form-footer">
+          <span class="char-count"><span id="char-count">0</span>/500</span>
+          <button type="submit" class="btn btn-primary">Send spørsmål</button>
+        </div>
+      </form>
+      <p id="nickname-display" class="nickname-display" style="display:none;">
+        Ditt kallenavn: <strong id="my-nickname"></strong>
+      </p>
+      <p id="error-message" class="error-message" style="display:none;"></p>
+    </section>
+
+    <section id="focused-section" class="focused-banner" style="display:none;">
+      <div class="focused-label">Nå diskuteres:</div>
+      <p class="focused-text" id="focused-text"></p>
+      <p class="focused-author" id="focused-author"></p>
+    </section>
+
+    <section id="questions-section">
+      <h2>Spørsmål <span class="question-count" id="question-count">(0)</span></h2>
+      <div id="questions-list" class="questions-list">
+        <p class="empty-state" id="empty-state">Ingen spørsmål ennå. Vær den første!</p>
+      </div>
+    </section>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/audience.js"></script>
+</body>
+</html>

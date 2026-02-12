@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TKAI QA – Opprett sesjon</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="hero">
+      <h1>TKAI <span class="accent">QA</span></h1>
+      <p class="tagline">Spørsmål &amp; svar for ditt neste foredrag</p>
+    </header>
+
+    <section id="create-section" class="card">
+      <h2>Opprett ny sesjon</h2>
+      <form id="create-form">
+        <label for="title">Foredragstittel</label>
+        <input type="text" id="title" placeholder="f.eks. AI i hverdagen" required maxlength="120">
+
+        <label for="speaker">Foredragsholder</label>
+        <input type="text" id="speaker" placeholder="Ditt navn" required maxlength="80">
+
+        <button type="submit" class="btn btn-primary">Opprett sesjon</button>
+      </form>
+    </section>
+
+    <section id="links-section" class="card" style="display: none;">
+      <h2>Sesjonen er opprettet!</h2>
+      <p class="session-title" id="session-title"></p>
+
+      <div class="link-group">
+        <label>Publikumslenke <span class="hint">(del med publikum)</span></label>
+        <div class="link-box">
+          <input type="text" id="audience-link" readonly>
+          <button class="btn btn-small" onclick="copyLink('audience-link')">Kopier</button>
+        </div>
+      </div>
+
+      <div class="link-group">
+        <label>Foredragsholderlenke <span class="hint">(privat – for deg)</span></label>
+        <div class="link-box">
+          <input type="text" id="speaker-link" readonly>
+          <button class="btn btn-small" onclick="copyLink('speaker-link')">Kopier</button>
+        </div>
+      </div>
+
+      <div class="link-actions">
+        <a id="go-audience" href="#" class="btn btn-secondary">Åpne publikumsvisning</a>
+        <a id="go-speaker" href="#" class="btn btn-primary">Åpne foredragsholdervisning</a>
+      </div>
+
+      <button class="btn btn-text" onclick="resetForm()">Opprett en ny sesjon</button>
+    </section>
+  </div>
+
+  <script>
+    const form = document.getElementById('create-form');
+    const createSection = document.getElementById('create-section');
+    const linksSection = document.getElementById('links-section');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('title').value.trim();
+      const speaker = document.getElementById('speaker').value.trim();
+
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, speaker }),
+      });
+
+      if (!res.ok) {
+        alert('Noe gikk galt. Prøv igjen.');
+        return;
+      }
+
+      const session = await res.json();
+      const base = window.location.origin;
+
+      document.getElementById('session-title').textContent = `"${session.title}" av ${session.speaker}`;
+      document.getElementById('audience-link').value = `${base}/s/${session.slug}`;
+      document.getElementById('speaker-link').value = `${base}/s/${session.slug}/speaker`;
+      document.getElementById('go-audience').href = `/s/${session.slug}`;
+      document.getElementById('go-speaker').href = `/s/${session.slug}/speaker`;
+
+      createSection.style.display = 'none';
+      linksSection.style.display = 'block';
+    });
+
+    function copyLink(inputId) {
+      const input = document.getElementById(inputId);
+      input.select();
+      navigator.clipboard.writeText(input.value);
+      const btn = input.nextElementSibling;
+      btn.textContent = 'Kopiert!';
+      setTimeout(() => btn.textContent = 'Kopier', 2000);
+    }
+
+    function resetForm() {
+      createSection.style.display = 'block';
+      linksSection.style.display = 'none';
+      form.reset();
+    }
+  </script>
+</body>
+</html>

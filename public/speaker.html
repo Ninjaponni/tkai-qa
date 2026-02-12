@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TKAI QA – Foredragsholder</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="speaker-body">
+  <div class="container">
+    <header id="session-header">
+      <div class="header-row">
+        <div>
+          <h1 id="session-title">Laster...</h1>
+          <p class="speaker-name" id="speaker-name"></p>
+        </div>
+        <span class="badge badge-speaker">Foredragsholder</span>
+      </div>
+    </header>
+
+    <section id="focus-overlay" class="focus-overlay" style="display:none;">
+      <div class="focus-content">
+        <p class="focus-question-text" id="focus-question-text"></p>
+        <p class="focus-meta" id="focus-meta"></p>
+        <button class="btn btn-secondary btn-large" id="unfocus-btn">Tilbake til listen</button>
+      </div>
+    </section>
+
+    <section id="questions-section">
+      <h2>Spørsmål <span class="question-count" id="question-count">(0)</span></h2>
+
+      <div class="filter-bar">
+        <button class="btn btn-filter active" data-filter="all">Alle</button>
+        <button class="btn btn-filter" data-filter="active">Aktive</button>
+        <button class="btn btn-filter" data-filter="hidden">Skjulte</button>
+      </div>
+
+      <div id="questions-list" class="questions-list">
+        <p class="empty-state" id="empty-state">Venter på spørsmål fra publikum...</p>
+      </div>
+    </section>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/speaker.js"></script>
+</body>
+</html>
