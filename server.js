@@ -11,19 +11,38 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.json());
+// Support base64 image uploads (up to 5MB)
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// --- Auto-cleanup: delete sessions older than 24 hours ---
+function cleanupOldSessions() {
+  const old = stmts.getOldSessionIds.all();
+  for (const { id } of old) {
+    stmts.deleteQuestionsBySession.run(id);
+  }
+  stmts.deleteOldSessions.run();
+}
+// Run cleanup every hour
+setInterval(cleanupOldSessions, 60 * 60 * 1000);
+cleanupOldSessions();
+
+// --- Helper: broadcast updated questions ---
+function broadcastQuestions(slug, sessionId) {
+  const questions = stmts.getQuestionsWithAnswered.all(sessionId);
+  const allQuestions = stmts.getAllQuestions.all(sessionId);
+  io.to(slug).emit('questions-updated', { questions, allQuestions });
+}
 
 // --- REST API ---
 
 // Create a new session
 app.post('/api/sessions', (req, res) => {
-  const { title, speaker } = req.body;
+  const { title, speaker, speakerImage } = req.body;
   if (!title || !speaker) {
     return res.status(400).json({ error: 'Tittel og foredragsholder er påkrevd.' });
   }
 
-  // Generate slug from title
   const base = title
     .toLowerCase()
     .replace(/[æ]/g, 'ae').replace(/[ø]/g, 'o').replace(/[å]/g, 'aa')
@@ -32,7 +51,7 @@ app.post('/api/sessions', (req, res) => {
   const slug = `${base}-${uuidv4().slice(0, 6)}`;
 
   try {
-    stmts.createSession.run(slug, title, speaker);
+    stmts.createSession.run(slug, title, speaker, speakerImage || null);
     const session = stmts.getSessionBySlug.get(slug);
     res.json(session);
   } catch (err) {
@@ -69,6 +88,13 @@ app.get('/s/:slug/speaker', (req, res) => {
 io.on('connection', (socket) => {
   socket.on('join-session', (slug) => {
     socket.join(slug);
+    // Send current questions immediately
+    const session = stmts.getSessionBySlug.get(slug);
+    if (session) {
+      const questions = stmts.getQuestionsWithAnswered.all(session.id);
+      const allQuestions = stmts.getAllQuestions.all(session.id);
+      socket.emit('questions-updated', { questions, allQuestions });
+    }
   });
 
   socket.on('new-question', ({ slug, text, visitorId, nickname }) => {
@@ -93,11 +119,9 @@ io.on('connection', (socket) => {
     const nick = nickname || generateNickname();
     stmts.createQuestion.run(session.id, text.trim(), nick);
 
-    // Send questions to audience (excludes hidden)
-    const questions = stmts.getQuestions.all(session.id);
-    const allQuestions = stmts.getAllQuestions.all(session.id);
-
-    io.to(slug).emit('questions-updated', { questions, allQuestions, nickname: nick });
+    broadcastQuestions(slug, session.id);
+    // Send nickname back to the sender
+    socket.emit('nickname-assigned', nick);
   });
 
   socket.on('upvote', ({ slug, questionId, visitorId }) => {
@@ -115,26 +139,20 @@ io.on('connection', (socket) => {
 
     const session = stmts.getSessionBySlug.get(slug);
     if (!session) return;
-
-    const questions = stmts.getQuestions.all(session.id);
-    const allQuestions = stmts.getAllQuestions.all(session.id);
-    io.to(slug).emit('questions-updated', { questions, allQuestions });
+    broadcastQuestions(slug, session.id);
   });
 
   socket.on('focus-question', ({ slug, questionId }) => {
     const question = stmts.getQuestion.get(questionId);
     if (!question) return;
 
-    // Unfocus all others first
     stmts.unfocusAll.run(question.session_id);
     stmts.setQuestionStatus.run('focused', questionId);
 
     const session = stmts.getSessionBySlug.get(slug);
     if (!session) return;
 
-    const questions = stmts.getQuestions.all(session.id);
-    const allQuestions = stmts.getAllQuestions.all(session.id);
-    io.to(slug).emit('questions-updated', { questions, allQuestions });
+    broadcastQuestions(slug, session.id);
     io.to(slug).emit('question-focused', stmts.getQuestion.get(questionId));
   });
 
@@ -147,9 +165,20 @@ io.on('connection', (socket) => {
     const session = stmts.getSessionBySlug.get(slug);
     if (!session) return;
 
-    const questions = stmts.getQuestions.all(session.id);
-    const allQuestions = stmts.getAllQuestions.all(session.id);
-    io.to(slug).emit('questions-updated', { questions, allQuestions });
+    broadcastQuestions(slug, session.id);
+    io.to(slug).emit('question-unfocused');
+  });
+
+  socket.on('answer-question', ({ slug, questionId }) => {
+    const question = stmts.getQuestion.get(questionId);
+    if (!question) return;
+
+    stmts.setQuestionStatus.run('answered', questionId);
+
+    const session = stmts.getSessionBySlug.get(slug);
+    if (!session) return;
+
+    broadcastQuestions(slug, session.id);
     io.to(slug).emit('question-unfocused');
   });
 
@@ -161,10 +190,7 @@ io.on('connection', (socket) => {
 
     const session = stmts.getSessionBySlug.get(slug);
     if (!session) return;
-
-    const questions = stmts.getQuestions.all(session.id);
-    const allQuestions = stmts.getAllQuestions.all(session.id);
-    io.to(slug).emit('questions-updated', { questions, allQuestions });
+    broadcastQuestions(slug, session.id);
   });
 
   socket.on('delete-question', ({ slug, questionId }) => {
@@ -173,10 +199,7 @@ io.on('connection', (socket) => {
 
     const session = stmts.getSessionBySlug.get(slug);
     if (!session) return;
-
-    const questions = stmts.getQuestions.all(session.id);
-    const allQuestions = stmts.getAllQuestions.all(session.id);
-    io.to(slug).emit('questions-updated', { questions, allQuestions });
+    broadcastQuestions(slug, session.id);
   });
 });
 

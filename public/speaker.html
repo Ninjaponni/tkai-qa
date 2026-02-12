@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TKAI QA – Foredragsholder</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 </head>
 <body class="speaker-body">
   <div class="container">
@@ -12,26 +13,45 @@
       <div class="header-row">
         <div>
           <h1 id="session-title">Laster...</h1>
-          <p class="speaker-name" id="speaker-name"></p>
+          <div class="speaker-info" id="speaker-info">
+            <img class="speaker-avatar" id="speaker-avatar" src="" alt="" style="display:none;">
+            <span class="speaker-name" id="speaker-name"></span>
+          </div>
         </div>
         <span class="badge badge-speaker">Foredragsholder</span>
       </div>
     </header>
 
+    <!-- QR code toggle for projector -->
+    <section class="card" id="qr-card" style="display:none;">
+      <div class="qr-section">
+        <canvas id="qr-canvas"></canvas>
+        <p class="qr-label">Skann for å stille spørsmål</p>
+      </div>
+      <button class="btn btn-secondary" onclick="document.getElementById('qr-card').style.display='none'">Skjul QR-kode</button>
+    </section>
+
     <section id="focus-overlay" class="focus-overlay" style="display:none;">
       <div class="focus-content">
         <p class="focus-question-text" id="focus-question-text"></p>
         <p class="focus-meta" id="focus-meta"></p>
-        <button class="btn btn-secondary btn-large" id="unfocus-btn">Tilbake til listen</button>
+        <div class="focus-actions">
+          <button class="btn btn-primary btn-large" id="answer-btn">Besvart</button>
+          <button class="btn btn-secondary btn-large" id="unfocus-btn">Tilbake til listen</button>
+        </div>
       </div>
     </section>
 
     <section id="questions-section">
-      <h2>Spørsmål <span class="question-count" id="question-count">(0)</span></h2>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h2>Spørsmål <span class="question-count" id="question-count">(0)</span></h2>
+        <button class="btn btn-small" onclick="document.getElementById('qr-card').style.display='block'">Vis QR-kode</button>
+      </div>
 
       <div class="filter-bar">
         <button class="btn btn-filter active" data-filter="all">Alle</button>
         <button class="btn btn-filter" data-filter="active">Aktive</button>
+        <button class="btn btn-filter" data-filter="answered">Besvarte</button>
         <button class="btn btn-filter" data-filter="hidden">Skjulte</button>
       </div>
 

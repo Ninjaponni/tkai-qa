@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TKAI QA – Opprett sesjon</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -22,13 +23,29 @@
         <label for="speaker">Foredragsholder</label>
         <input type="text" id="speaker" placeholder="Ditt navn" required maxlength="80">
 
+        <div class="image-upload">
+          <label>Profilbilde (valgfritt)</label>
+          <div class="image-upload-area">
+            <div class="image-preview" id="image-preview" onclick="document.getElementById('image-input').click()">
+              <span class="image-preview-placeholder" id="image-placeholder">Last opp</span>
+            </div>
+            <input type="file" id="image-input" accept="image/*">
+            <span class="image-upload-text">Klikk for å laste opp bilde</span>
+          </div>
+        </div>
+
         <button type="submit" class="btn btn-primary">Opprett sesjon</button>
       </form>
     </section>
 
     <section id="links-section" class="card" style="display: none;">
       <h2>Sesjonen er opprettet!</h2>
-      <p class="session-title" id="session-title"></p>
+      <p class="session-title-display" id="session-title"></p>
+
+      <div class="qr-section" id="qr-section">
+        <canvas id="qr-canvas"></canvas>
+        <p class="qr-label">Skann med mobilen for å stille spørsmål</p>
+      </div>
 
       <div class="link-group">
         <label>Publikumslenke <span class="hint">(del med publikum)</span></label>
@@ -47,8 +64,8 @@
       </div>
 
       <div class="link-actions">
-        <a id="go-audience" href="#" class="btn btn-secondary">Åpne publikumsvisning</a>
-        <a id="go-speaker" href="#" class="btn btn-primary">Åpne foredragsholdervisning</a>
+        <a id="go-audience" href="#" class="btn btn-secondary">Publikumsvisning</a>
+        <a id="go-speaker" href="#" class="btn btn-primary">Foredragsholdervisning</a>
       </div>
 
       <button class="btn btn-text" onclick="resetForm()">Opprett en ny sesjon</button>
@@ -59,6 +76,23 @@
     const form = document.getElementById('create-form');
     const createSection = document.getElementById('create-section');
     const linksSection = document.getElementById('links-section');
+    const imageInput = document.getElementById('image-input');
+    const imagePreview = document.getElementById('image-preview');
+    const imagePlaceholder = document.getElementById('image-placeholder');
+    let speakerImageBase64 = null;
+
+    // Image upload preview
+    imageInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        speakerImageBase64 = ev.target.result;
+        imagePreview.innerHTML = `<img src="${ev.target.result}" alt="Preview">`;
+      };
+      reader.readAsDataURL(file);
+    });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -68,7 +102,7 @@
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, speaker }),
+        body: JSON.stringify({ title, speaker, speakerImage: speakerImageBase64 }),
       });
 
       if (!res.ok) {
@@ -78,12 +112,20 @@
 
       const session = await res.json();
       const base = window.location.origin;
+      const audienceUrl = `${base}/s/${session.slug}`;
 
       document.getElementById('session-title').textContent = `"${session.title}" av ${session.speaker}`;
-      document.getElementById('audience-link').value = `${base}/s/${session.slug}`;
+      document.getElementById('audience-link').value = audienceUrl;
       document.getElementById('speaker-link').value = `${base}/s/${session.slug}/speaker`;
       document.getElementById('go-audience').href = `/s/${session.slug}`;
       document.getElementById('go-speaker').href = `/s/${session.slug}/speaker`;
+
+      // Generate QR code
+      QRCode.toCanvas(document.getElementById('qr-canvas'), audienceUrl, {
+        width: 200,
+        margin: 1,
+        color: { dark: '#040308', light: '#ffffff' },
+      });
 
       createSection.style.display = 'none';
       linksSection.style.display = 'block';
@@ -102,6 +144,8 @@
       createSection.style.display = 'block';
       linksSection.style.display = 'none';
       form.reset();
+      speakerImageBase64 = null;
+      imagePreview.innerHTML = '<span class="image-preview-placeholder">Last opp</span>';
     }
   </script>
 </body>

@@ -18,9 +18,13 @@ if (!visitorId) {
 let nickname = localStorage.getItem(`tkai-nick-${slug}`);
 const votedQuestions = JSON.parse(localStorage.getItem(`tkai-votes-${slug}`) || '[]');
 
+// Track known question IDs for animation
+let knownQuestionIds = new Set();
+
 // DOM elements
 const sessionTitle = document.getElementById('session-title');
 const speakerName = document.getElementById('speaker-name');
+const speakerAvatar = document.getElementById('speaker-avatar');
 const questionForm = document.getElementById('question-form');
 const questionText = document.getElementById('question-text');
 const charCount = document.getElementById('char-count');
@@ -46,6 +50,11 @@ async function loadSession() {
   sessionTitle.textContent = session.title;
   speakerName.textContent = `av ${session.speaker}`;
   document.title = `${session.title} – TKAI QA`;
+
+  if (session.speaker_image) {
+    speakerAvatar.src = session.speaker_image;
+    speakerAvatar.style.display = 'block';
+  }
 }
 
 // Show nickname if we have one
@@ -84,7 +93,7 @@ questionForm.addEventListener('submit', async (e) => {
 // Render questions
 function renderQuestions(questions) {
   const activeQuestions = questions.filter(q => q.status !== 'hidden');
-  questionCount.textContent = `(${activeQuestions.length})`;
+  questionCount.textContent = `(${activeQuestions.filter(q => q.status !== 'answered').length})`;
 
   if (activeQuestions.length === 0) {
     emptyState.style.display = 'block';
@@ -98,16 +107,21 @@ function renderQuestions(questions) {
 
   activeQuestions.forEach(q => {
     const div = document.createElement('div');
-    div.className = `question-card ${q.status === 'focused' ? 'question-focused' : ''} fade-in`;
+    const isNew = !knownQuestionIds.has(q.id);
+    const statusClass = q.status === 'focused' ? 'question-focused' : q.status === 'answered' ? 'question-answered' : '';
+    div.className = `question-card ${statusClass} ${isNew ? 'slide-in' : ''}`;
     div.dataset.id = q.id;
+    knownQuestionIds.add(q.id);
 
     const hasVoted = votedQuestions.includes(q.id);
+    const answeredBadge = q.status === 'answered' ? '<span class="answered-check">&#10003; Besvart</span>' : '';
 
     div.innerHTML = `
       <div class="question-content">
         <p class="question-text">${escapeHtml(q.text)}</p>
         <p class="question-meta">
           <span class="question-nickname">${escapeHtml(q.nickname)}</span>
+          ${answeredBadge}
           <span class="question-time">${timeAgo(q.created_at)}</span>
         </p>
       </div>
@@ -141,13 +155,16 @@ socket.on('connect', () => {
   socket.emit('join-session', slug);
 });
 
-socket.on('questions-updated', ({ questions, nickname: newNick }) => {
-  if (newNick && !localStorage.getItem(`tkai-nick-${slug}`)) {
-    nickname = newNick;
+socket.on('questions-updated', ({ questions }) => {
+  renderQuestions(questions);
+});
+
+socket.on('nickname-assigned', (nick) => {
+  if (!localStorage.getItem(`tkai-nick-${slug}`)) {
+    nickname = nick;
     localStorage.setItem(`tkai-nick-${slug}`, nickname);
     updateNicknameDisplay();
   }
-  renderQuestions(questions);
 });
 
 socket.on('question-focused', (question) => {

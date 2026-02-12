@@ -14,6 +14,7 @@ db.exec(`
     slug TEXT UNIQUE NOT NULL,
     title TEXT NOT NULL,
     speaker TEXT NOT NULL,
+    speaker_image TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
@@ -40,7 +41,7 @@ db.exec(`
 // Prepared statements
 const stmts = {
   createSession: db.prepare(
-    'INSERT INTO sessions (slug, title, speaker) VALUES (?, ?, ?)'
+    'INSERT INTO sessions (slug, title, speaker, speaker_image) VALUES (?, ?, ?, ?)'
   ),
   getSessionBySlug: db.prepare(
     'SELECT * FROM sessions WHERE slug = ?'
@@ -49,12 +50,16 @@ const stmts = {
     'INSERT INTO questions (session_id, text, nickname) VALUES (?, ?, ?)'
   ),
   getQuestions: db.prepare(
+    `SELECT * FROM questions WHERE session_id = ? AND status NOT IN ('hidden', 'answered')
+     ORDER BY CASE status WHEN 'focused' THEN 0 ELSE 1 END, upvotes DESC, created_at DESC`
+  ),
+  getQuestionsWithAnswered: db.prepare(
     `SELECT * FROM questions WHERE session_id = ? AND status != 'hidden'
-     ORDER BY CASE status WHEN 'focused' THEN 0 ELSE 1 END, upvotes DESC, created_at ASC`
+     ORDER BY CASE status WHEN 'focused' THEN 0 WHEN 'active' THEN 1 WHEN 'answered' THEN 2 ELSE 3 END, upvotes DESC, created_at DESC`
   ),
   getAllQuestions: db.prepare(
     `SELECT * FROM questions WHERE session_id = ?
-     ORDER BY CASE status WHEN 'focused' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, upvotes DESC, created_at ASC`
+     ORDER BY CASE status WHEN 'focused' THEN 0 WHEN 'active' THEN 1 WHEN 'answered' THEN 2 ELSE 3 END, upvotes DESC, created_at DESC`
   ),
   getQuestion: db.prepare(
     'SELECT * FROM questions WHERE id = ?'
@@ -79,6 +84,15 @@ const stmts = {
   ),
   deleteVotesForQuestion: db.prepare(
     'DELETE FROM votes WHERE question_id = ?'
+  ),
+  deleteOldSessions: db.prepare(
+    `DELETE FROM sessions WHERE created_at < datetime('now', '-24 hours')`
+  ),
+  getOldSessionIds: db.prepare(
+    `SELECT id FROM sessions WHERE created_at < datetime('now', '-24 hours')`
+  ),
+  deleteQuestionsBySession: db.prepare(
+    'DELETE FROM questions WHERE session_id = ?'
   ),
 };
 

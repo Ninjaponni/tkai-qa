@@ -7,10 +7,14 @@ const slug = pathParts[slugIndex];
 
 let allQuestions = [];
 let currentFilter = 'all';
+let previousQuestionCount = 0;
+let focusedQuestionId = null;
+const baseTitle = 'TKAI QA – Foredragsholder';
 
 // DOM elements
 const sessionTitle = document.getElementById('session-title');
 const speakerName = document.getElementById('speaker-name');
+const speakerAvatar = document.getElementById('speaker-avatar');
 const questionsList = document.getElementById('questions-list');
 const questionCount = document.getElementById('question-count');
 const emptyState = document.getElementById('empty-state');
@@ -18,6 +22,7 @@ const focusOverlay = document.getElementById('focus-overlay');
 const focusQuestionText = document.getElementById('focus-question-text');
 const focusMeta = document.getElementById('focus-meta');
 const unfocusBtn = document.getElementById('unfocus-btn');
+const answerBtn = document.getElementById('answer-btn');
 
 // Load session
 async function loadSession() {
@@ -30,7 +35,38 @@ async function loadSession() {
   sessionTitle.textContent = session.title;
   speakerName.textContent = `av ${session.speaker}`;
   document.title = `${session.title} – Foredragsholder – TKAI QA`;
+
+  if (session.speaker_image) {
+    speakerAvatar.src = session.speaker_image;
+    speakerAvatar.style.display = 'block';
+  }
+
+  // Generate QR code for audience URL
+  const audienceUrl = `${window.location.origin}/s/${slug}`;
+  if (typeof QRCode !== 'undefined') {
+    QRCode.toCanvas(document.getElementById('qr-canvas'), audienceUrl, {
+      width: 200,
+      margin: 1,
+      color: { dark: '#040308', light: '#ffffff' },
+    });
+  }
 }
+
+// Tab badge for new questions
+function updateTabBadge() {
+  const activeCount = allQuestions.filter(q => q.status === 'active' || q.status === 'focused').length;
+  const newCount = activeCount - previousQuestionCount;
+  if (newCount > 0 && document.hidden) {
+    document.title = `(${newCount} nye) ${baseTitle}`;
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    previousQuestionCount = allQuestions.filter(q => q.status === 'active' || q.status === 'focused').length;
+    document.title = `${sessionTitle.textContent} – Foredragsholder – TKAI QA`;
+  }
+});
 
 // Filter buttons
 document.querySelectorAll('.btn-filter').forEach(btn => {
@@ -42,23 +78,32 @@ document.querySelectorAll('.btn-filter').forEach(btn => {
   });
 });
 
+// Track known IDs for slide-in animation
+let knownIds = new Set();
+
 // Render questions
 function renderQuestions() {
   let filtered = allQuestions;
   if (currentFilter === 'active') {
     filtered = allQuestions.filter(q => q.status === 'active' || q.status === 'focused');
+  } else if (currentFilter === 'answered') {
+    filtered = allQuestions.filter(q => q.status === 'answered');
   } else if (currentFilter === 'hidden') {
     filtered = allQuestions.filter(q => q.status === 'hidden');
   }
 
-  const activeCount = allQuestions.filter(q => q.status !== 'hidden').length;
+  const activeCount = allQuestions.filter(q => q.status === 'active' || q.status === 'focused').length;
   questionCount.textContent = `(${activeCount})`;
 
   if (filtered.length === 0) {
     emptyState.style.display = 'block';
-    emptyState.textContent = currentFilter === 'hidden'
-      ? 'Ingen skjulte spørsmål.'
-      : 'Venter på spørsmål fra publikum...';
+    const msgs = {
+      hidden: 'Ingen skjulte spørsmål.',
+      answered: 'Ingen besvarte spørsmål ennå.',
+      active: 'Ingen aktive spørsmål.',
+      all: 'Venter på spørsmål fra publikum...',
+    };
+    emptyState.textContent = msgs[currentFilter] || msgs.all;
     questionsList.innerHTML = '';
     questionsList.appendChild(emptyState);
     return;
@@ -69,23 +114,37 @@ function renderQuestions() {
 
   filtered.forEach(q => {
     const div = document.createElement('div');
-    div.className = `question-card speaker-card ${q.status === 'focused' ? 'question-focused' : ''} ${q.status === 'hidden' ? 'question-hidden' : ''} fade-in`;
+    const isNew = !knownIds.has(q.id);
+    knownIds.add(q.id);
+
+    const statusClass = q.status === 'focused' ? 'question-focused'
+      : q.status === 'answered' ? 'question-answered'
+      : q.status === 'hidden' ? 'question-hidden' : '';
+
+    div.className = `question-card speaker-card ${statusClass} ${isNew ? 'slide-in' : ''}`;
     div.dataset.id = q.id;
 
     let actions = '';
     if (q.status === 'hidden') {
       actions = `
-        <button class="btn btn-action btn-restore" data-action="restore" data-id="${q.id}" title="Gjenopprett">Vis</button>
-        <button class="btn btn-action btn-delete" data-action="delete" data-id="${q.id}" title="Slett permanent">Slett</button>
+        <button class="btn btn-action btn-restore" data-action="restore" data-id="${q.id}">Vis</button>
+        <button class="btn btn-action btn-delete" data-action="delete" data-id="${q.id}">Slett</button>
       `;
     } else if (q.status === 'focused') {
       actions = `
-        <button class="btn btn-action btn-unfocus" data-action="unfocus" data-id="${q.id}">Avslutt fokus</button>
+        <button class="btn btn-action btn-answer" data-action="answer" data-id="${q.id}">Besvart</button>
+        <button class="btn btn-action btn-unfocus" data-action="unfocus" data-id="${q.id}">Avslutt</button>
         <button class="btn btn-action btn-hide" data-action="hide" data-id="${q.id}">Skjul</button>
+      `;
+    } else if (q.status === 'answered') {
+      actions = `
+        <button class="btn btn-action btn-restore" data-action="restore" data-id="${q.id}">Aktiver</button>
+        <button class="btn btn-action btn-delete" data-action="delete" data-id="${q.id}">Slett</button>
       `;
     } else {
       actions = `
         <button class="btn btn-action btn-focus" data-action="focus" data-id="${q.id}">Fokus</button>
+        <button class="btn btn-action btn-answer" data-action="answer" data-id="${q.id}">Besvart</button>
         <button class="btn btn-action btn-hide" data-action="hide" data-id="${q.id}">Skjul</button>
         <button class="btn btn-action btn-delete" data-action="delete" data-id="${q.id}">Slett</button>
       `;
@@ -113,9 +172,7 @@ function renderQuestions() {
   // Attach action handlers
   questionsList.querySelectorAll('.btn-action').forEach(btn => {
     btn.addEventListener('click', () => {
-      const action = btn.dataset.action;
-      const qId = parseInt(btn.dataset.id);
-      handleAction(action, qId);
+      handleAction(btn.dataset.action, parseInt(btn.dataset.id));
     });
   });
 }
@@ -128,11 +185,14 @@ function handleAction(action, questionId) {
     case 'unfocus':
       socket.emit('unfocus-question', { slug, questionId });
       break;
+    case 'answer':
+      socket.emit('answer-question', { slug, questionId });
+      break;
     case 'hide':
       socket.emit('hide-question', { slug, questionId });
       break;
     case 'restore':
-      socket.emit('unfocus-question', { slug, questionId }); // resets to active
+      socket.emit('unfocus-question', { slug, questionId });
       break;
     case 'delete':
       if (confirm('Er du sikker på at du vil slette dette spørsmålet permanent?')) {
@@ -142,11 +202,16 @@ function handleAction(action, questionId) {
   }
 }
 
-// Focus overlay
+// Focus overlay buttons
 unfocusBtn.addEventListener('click', () => {
-  const focused = allQuestions.find(q => q.status === 'focused');
-  if (focused) {
-    socket.emit('unfocus-question', { slug, questionId: focused.id });
+  if (focusedQuestionId) {
+    socket.emit('unfocus-question', { slug, questionId: focusedQuestionId });
+  }
+});
+
+answerBtn.addEventListener('click', () => {
+  if (focusedQuestionId) {
+    socket.emit('answer-question', { slug, questionId: focusedQuestionId });
   }
 });
 
@@ -158,15 +223,18 @@ socket.on('connect', () => {
 socket.on('questions-updated', (data) => {
   allQuestions = data.allQuestions;
   renderQuestions();
+  updateTabBadge();
 });
 
 socket.on('question-focused', (question) => {
+  focusedQuestionId = question.id;
   focusOverlay.style.display = 'flex';
   focusQuestionText.textContent = question.text;
   focusMeta.textContent = `${question.nickname} · ▲ ${question.upvotes}`;
 });
 
 socket.on('question-unfocused', () => {
+  focusedQuestionId = null;
   focusOverlay.style.display = 'none';
 });
 
@@ -190,6 +258,7 @@ function timeAgo(dateStr) {
 function statusLabel(status) {
   switch (status) {
     case 'focused': return 'Fokusert';
+    case 'answered': return 'Besvart';
     case 'hidden': return 'Skjult';
     default: return 'Aktiv';
   }

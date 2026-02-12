@@ -1,4 +1,6 @@
 /* === Reset & Base === */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -6,24 +8,26 @@
 }
 
 :root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface-hover: #222633;
-  --border: #2a2e3d;
+  --bg: #040308;
+  --surface: #0e0c14;
+  --surface-hover: #16131f;
+  --border: #1e1a2a;
   --text: #e4e6ed;
-  --text-muted: #8b8fa3;
+  --text-muted: #7b7d8e;
   --accent: #6c5ce7;
   --accent-light: #a29bfe;
   --success: #00b894;
+  --success-dim: rgba(0, 184, 148, 0.12);
   --warning: #fdcb6e;
   --danger: #e17055;
-  --focus-bg: #1e1040;
-  --radius: 12px;
-  --radius-sm: 8px;
+  --focus-bg: #120e22;
+  --answered-bg: rgba(0, 184, 148, 0.06);
+  --radius: 14px;
+  --radius-sm: 10px;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
@@ -43,9 +47,9 @@ body {
 }
 
 .hero h1 {
-  font-size: 2.5rem;
-  font-weight: 800;
-  letter-spacing: -0.5px;
+  font-size: 2.8rem;
+  font-weight: 700;
+  letter-spacing: -1px;
 }
 
 .accent {
@@ -54,7 +58,7 @@ body {
 
 .tagline {
   color: var(--text-muted);
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   margin-top: 8px;
 }
 
@@ -65,6 +69,21 @@ header#session-header {
 header#session-header h1 {
   font-size: 1.5rem;
   font-weight: 700;
+}
+
+.speaker-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.speaker-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border);
 }
 
 .speaker-name {
@@ -80,11 +99,12 @@ header#session-header h1 {
 }
 
 .badge {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: 20px;
   white-space: nowrap;
+  letter-spacing: 0.3px;
 }
 
 .badge-speaker {
@@ -151,6 +171,58 @@ textarea {
   color: var(--text-muted);
 }
 
+/* === Image upload === */
+.image-upload {
+  margin-bottom: 16px;
+}
+
+.image-upload-area {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.image-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  border: 2px dashed var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.image-preview:hover {
+  border-color: var(--accent);
+}
+
+.image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-preview-placeholder {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.image-upload input[type="file"] {
+  display: none;
+}
+
+.image-upload-text {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
 /* === Buttons === */
 .btn {
   display: inline-block;
@@ -159,6 +231,7 @@ textarea {
   border-radius: var(--radius-sm);
   font-size: 0.95rem;
   font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
   text-decoration: none;
   text-align: center;
@@ -194,6 +267,9 @@ textarea {
   background: var(--accent);
   color: #fff;
   border-radius: var(--radius-sm);
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .btn-text {
@@ -214,7 +290,7 @@ textarea {
 }
 
 /* === Links section === */
-.session-title {
+.session-title-display {
   color: var(--accent-light);
   font-size: 1.05rem;
   margin-bottom: 20px;
@@ -254,11 +330,31 @@ textarea {
   flex: 1;
 }
 
+/* === QR Code === */
+.qr-section {
+  text-align: center;
+  margin: 24px 0 16px;
+  padding: 24px;
+  background: #fff;
+  border-radius: var(--radius);
+}
+
+.qr-section canvas {
+  display: block;
+  margin: 0 auto;
+}
+
+.qr-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 12px;
+}
+
 /* === Questions List === */
 .questions-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .question-card {
@@ -269,7 +365,11 @@ textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  animation: fadeIn 0.3s ease;
+  transition: all 0.3s ease;
+}
+
+.question-card.slide-in {
+  animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .question-card.question-focused {
@@ -277,8 +377,15 @@ textarea {
   background: var(--focus-bg);
 }
 
+.question-card.question-answered {
+  opacity: 0.6;
+  background: var(--answered-bg);
+  border-color: var(--success);
+  border-style: dashed;
+}
+
 .question-card.question-hidden {
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .question-content {
@@ -292,10 +399,16 @@ textarea {
   word-break: break-word;
 }
 
+.question-answered .question-text {
+  text-decoration: line-through;
+  text-decoration-color: var(--success);
+}
+
 .question-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
   margin-top: 8px;
   font-size: 0.8rem;
   color: var(--text-muted);
@@ -323,6 +436,16 @@ textarea {
   font-size: 1rem;
 }
 
+/* === Answered check === */
+.answered-check {
+  color: var(--success);
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
 /* === Upvote Button === */
 .upvote-btn {
   display: flex;
@@ -338,6 +461,7 @@ textarea {
   transition: all 0.2s;
   min-width: 48px;
   flex-shrink: 0;
+  font-family: inherit;
 }
 
 .upvote-btn:hover:not(.upvoted) {
@@ -348,12 +472,17 @@ textarea {
 .upvote-btn.upvoted {
   border-color: var(--success);
   color: var(--success);
-  background: rgba(0, 184, 148, 0.1);
+  background: var(--success-dim);
   cursor: default;
 }
 
 .upvote-icon {
   font-size: 0.85rem;
+  transition: transform 0.2s;
+}
+
+.upvote-btn:not(.upvoted):hover .upvote-icon {
+  transform: translateY(-2px);
 }
 
 .upvote-count {
@@ -370,6 +499,7 @@ textarea {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .btn-action {
@@ -382,6 +512,7 @@ textarea {
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
+  font-family: inherit;
 }
 
 .btn-focus {
@@ -397,6 +528,16 @@ textarea {
 .btn-unfocus {
   border-color: var(--accent);
   background: var(--accent);
+  color: #fff;
+}
+
+.btn-answer {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.btn-answer:hover {
+  background: var(--success);
   color: #fff;
 }
 
@@ -450,6 +591,11 @@ textarea {
   color: var(--accent-light);
 }
 
+.status-answered {
+  background: var(--success-dim);
+  color: var(--success);
+}
+
 .status-hidden {
   background: rgba(253, 203, 110, 0.15);
   color: var(--warning);
@@ -471,6 +617,7 @@ textarea {
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
+  font-family: inherit;
 }
 
 .btn-filter.active {
@@ -494,6 +641,7 @@ textarea {
   justify-content: center;
   z-index: 100;
   padding: 32px;
+  animation: fadeIn 0.3s ease;
 }
 
 .focus-content {
@@ -513,6 +661,12 @@ textarea {
   font-size: 1.2rem;
   color: var(--text-muted);
   margin-bottom: 40px;
+}
+
+.focus-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
 }
 
 /* === Focused Banner (Audience) === */
@@ -564,6 +718,7 @@ textarea {
   padding: 10px;
   background: rgba(225, 112, 85, 0.1);
   border-radius: var(--radius-sm);
+  animation: fadeIn 0.3s ease;
 }
 
 .question-form-card {
@@ -572,9 +727,14 @@ textarea {
 
 /* === Animations === */
 @keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(-12px);
   }
   to {
     opacity: 1;
@@ -585,10 +745,6 @@ textarea {
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0.3); }
   50% { box-shadow: 0 0 0 8px rgba(108, 92, 231, 0); }
-}
-
-.fade-in {
-  animation: fadeIn 0.3s ease;
 }
 
 /* === Desktop/Projector === */
@@ -602,11 +758,12 @@ textarea {
   }
 
   .hero h1 {
-    font-size: 3rem;
+    font-size: 3.2rem;
   }
 
   .question-actions {
     flex-shrink: 0;
+    flex-wrap: nowrap;
   }
 
   .speaker-card {
