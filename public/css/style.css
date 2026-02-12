@@ -67,6 +67,20 @@ body {
   color: var(--accent-light);
 }
 
+.amp {
+  color: #fff;
+}
+
+/* === Footer === */
+.site-footer {
+  text-align: center;
+  padding: 32px 0 16px;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
 .tagline {
   color: var(--text-muted);
   font-size: 1.05rem;
