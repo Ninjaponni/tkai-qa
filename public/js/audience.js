@@ -282,7 +282,7 @@ function initSwipeHandlers() {
       currentX = diffX;
 
       // Apply dampened transform
-      const damped = currentX * 0.8;
+      const damped = currentX * 0.55;
       card.style.transform = `translateX(${damped}px)`;
 
       // Show appropriate background with progressive opacity
@@ -303,7 +303,7 @@ function initSwipeHandlers() {
       }
       isDragging = false;
 
-      const damped = currentX * 0.8;
+      const damped = currentX * 0.55;
 
       if (Math.abs(damped) >= THRESHOLD) {
         // Action triggered
