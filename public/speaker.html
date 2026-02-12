@@ -24,7 +24,7 @@
     </header>
 
     <!-- QR code toggle for projector -->
-    <section class="card" id="qr-card" style="display:none;">
+    <section class="card qr-card" id="qr-card">
       <div class="qr-section">
         <canvas id="qr-canvas"></canvas>
         <p class="qr-label">Skann for å stille spørsmål</p>
@@ -67,8 +67,15 @@
   <script src="/js/speaker.js"></script>
   <script>
     function toggleQR(show) {
-      document.getElementById('qr-card').style.display = show ? 'block' : 'none';
-      document.getElementById('show-qr-btn').style.display = show ? 'none' : '';
+      const card = document.getElementById('qr-card');
+      const btn = document.getElementById('show-qr-btn');
+      if (show) {
+        card.classList.add('qr-open');
+        btn.style.display = 'none';
+      } else {
+        card.classList.remove('qr-open');
+        btn.style.display = '';
+      }
     }
   </script>
 </body>
