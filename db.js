@@ -79,6 +79,12 @@ const stmts = {
   unfocusAll: db.prepare(
     `UPDATE questions SET status = 'active' WHERE session_id = ? AND status = 'focused'`
   ),
+  updateQuestionText: db.prepare(
+    'UPDATE questions SET text = ? WHERE id = ?'
+  ),
+  resetVotes: db.prepare(
+    'UPDATE questions SET upvotes = 0 WHERE id = ?'
+  ),
   deleteQuestion: db.prepare(
     'DELETE FROM questions WHERE id = ?'
   ),

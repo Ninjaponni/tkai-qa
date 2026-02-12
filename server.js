@@ -193,6 +193,58 @@ io.on('connection', (socket) => {
     broadcastQuestions(slug, session.id);
   });
 
+  socket.on('edit-question', ({ slug, questionId, newText, nickname }) => {
+    const question = stmts.getQuestion.get(questionId);
+    if (!question) return;
+
+    // Only the author can edit their own question
+    if (question.nickname !== nickname) {
+      socket.emit('error-message', 'Du kan bare redigere dine egne spørsmål.');
+      return;
+    }
+
+    if (!newText || newText.trim().length === 0) {
+      socket.emit('error-message', 'Spørsmålet kan ikke være tomt.');
+      return;
+    }
+
+    if (newText.trim().length > 500) {
+      socket.emit('error-message', 'Spørsmålet er for langt (maks 500 tegn).');
+      return;
+    }
+
+    if (isProfane(newText)) {
+      socket.emit('error-message', 'Spørsmålet inneholder upassende språk. Vennligst omformuler.');
+      return;
+    }
+
+    stmts.updateQuestionText.run(newText.trim(), questionId);
+    stmts.resetVotes.run(questionId);
+    stmts.deleteVotesForQuestion.run(questionId);
+
+    const session = stmts.getSessionBySlug.get(slug);
+    if (!session) return;
+    broadcastQuestions(slug, session.id);
+  });
+
+  socket.on('delete-own-question', ({ slug, questionId, nickname }) => {
+    const question = stmts.getQuestion.get(questionId);
+    if (!question) return;
+
+    // Only the author can delete their own question
+    if (question.nickname !== nickname) {
+      socket.emit('error-message', 'Du kan bare slette dine egne spørsmål.');
+      return;
+    }
+
+    stmts.deleteVotesForQuestion.run(questionId);
+    stmts.deleteQuestion.run(questionId);
+
+    const session = stmts.getSessionBySlug.get(slug);
+    if (!session) return;
+    broadcastQuestions(slug, session.id);
+  });
+
   socket.on('delete-question', ({ slug, questionId }) => {
     stmts.deleteVotesForQuestion.run(questionId);
     stmts.deleteQuestion.run(questionId);

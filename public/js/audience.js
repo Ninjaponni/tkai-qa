@@ -90,6 +90,10 @@ questionForm.addEventListener('submit', async (e) => {
   charCount.textContent = '0';
 });
 
+// Swipe state
+let hasShownSwipeHint = localStorage.getItem('tkai-swipe-hint-shown') === 'true';
+let editingQuestionId = null;
+
 // Render questions
 function renderQuestions(questions) {
   const activeQuestions = questions.filter(q => q.status !== 'hidden');
@@ -105,16 +109,39 @@ function renderQuestions(questions) {
   emptyState.style.display = 'none';
   const fragment = document.createDocumentFragment();
 
+  let hintShownThisRender = false;
+
   activeQuestions.forEach(q => {
-    const div = document.createElement('div');
+    const isOwn = nickname && q.nickname === nickname;
     const isNew = !knownQuestionIds.has(q.id);
     const statusClass = q.status === 'focused' ? 'question-focused' : q.status === 'answered' ? 'question-answered' : '';
+    const hasVoted = votedQuestions.includes(q.id);
+    const answeredBadge = q.status === 'answered' ? '<span class="answered-check">&#10003; Besvart</span>' : '';
+
+    // If currently editing this question, render edit mode
+    if (editingQuestionId === q.id && isOwn) {
+      const editWrapper = document.createElement('div');
+      editWrapper.className = `question-card ${statusClass}`;
+      editWrapper.dataset.id = q.id;
+      editWrapper.classList.add('editing');
+      editWrapper.innerHTML = `
+        <div class="question-content">
+          <textarea class="edit-area" maxlength="500">${escapeHtml(q.text)}</textarea>
+          <div class="edit-actions">
+            <button class="btn btn-primary btn-edit-save" data-id="${q.id}">Lagre</button>
+            <button class="btn btn-secondary btn-edit-cancel" data-id="${q.id}">Avbryt</button>
+          </div>
+          <p class="edit-vote-warning">Stemmer nullstilles ved redigering</p>
+        </div>
+      `;
+      fragment.appendChild(editWrapper);
+      return;
+    }
+
+    const div = document.createElement('div');
     div.className = `question-card ${statusClass} ${isNew ? 'slide-in' : ''}`;
     div.dataset.id = q.id;
     knownQuestionIds.add(q.id);
-
-    const hasVoted = votedQuestions.includes(q.id);
-    const answeredBadge = q.status === 'answered' ? '<span class="answered-check">&#10003; Besvart</span>' : '';
 
     div.innerHTML = `
       <div class="question-content">
@@ -131,7 +158,30 @@ function renderQuestions(questions) {
       </button>
     `;
 
-    fragment.appendChild(div);
+    // Wrap own questions in swipe container
+    if (isOwn && q.status === 'active') {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'swipe-wrapper';
+      wrapper.innerHTML = `
+        <div class="swipe-bg swipe-bg-edit"><span>Rediger</span></div>
+        <div class="swipe-bg swipe-bg-delete"><span>Slett</span></div>
+      `;
+      wrapper.appendChild(div);
+      fragment.appendChild(wrapper);
+
+      // Show hint for first own question (once)
+      if (!hasShownSwipeHint && !hintShownThisRender) {
+        hintShownThisRender = true;
+        const hint = document.createElement('p');
+        hint.className = 'swipe-hint';
+        hint.innerHTML = '<span class="hint-arrows">&larr; &rarr;</span> Sveip for å redigere eller slette';
+        fragment.appendChild(hint);
+        hasShownSwipeHint = true;
+        localStorage.setItem('tkai-swipe-hint-shown', 'true');
+      }
+    } else {
+      fragment.appendChild(div);
+    }
   });
 
   questionsList.innerHTML = '';
@@ -148,6 +198,139 @@ function renderQuestions(questions) {
       btn.disabled = true;
     });
   });
+
+  // Attach edit save/cancel handlers
+  questionsList.querySelectorAll('.btn-edit-save').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const qId = parseInt(btn.dataset.id);
+      const textarea = btn.closest('.question-card').querySelector('.edit-area');
+      const newText = textarea.value.trim();
+      if (!newText) return;
+      socket.emit('edit-question', { slug, questionId: qId, newText, nickname });
+      editingQuestionId = null;
+    });
+  });
+
+  questionsList.querySelectorAll('.btn-edit-cancel').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editingQuestionId = null;
+      renderQuestions(lastQuestions);
+    });
+  });
+
+  // Attach swipe handlers
+  initSwipeHandlers();
+
+  // Focus the edit textarea if in edit mode
+  const editArea = questionsList.querySelector('.edit-area');
+  if (editArea) {
+    editArea.focus();
+    editArea.setSelectionRange(editArea.value.length, editArea.value.length);
+  }
+}
+
+// Store last questions for re-render
+let lastQuestions = [];
+
+// Swipe touch handling
+function initSwipeHandlers() {
+  const wrappers = questionsList.querySelectorAll('.swipe-wrapper');
+
+  wrappers.forEach(wrapper => {
+    const card = wrapper.querySelector('.question-card');
+    const bgDelete = wrapper.querySelector('.swipe-bg-delete');
+    const bgEdit = wrapper.querySelector('.swipe-bg-edit');
+    const qId = parseInt(card.dataset.id);
+
+    let startX = 0;
+    let startY = 0;
+    let currentX = 0;
+    let isDragging = false;
+    let isHorizontal = null;
+    const THRESHOLD = 100;
+
+    card.addEventListener('touchstart', (e) => {
+      if (editingQuestionId) return;
+      const touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      currentX = 0;
+      isDragging = true;
+      isHorizontal = null;
+      card.classList.remove('snapping');
+      card.style.transition = 'none';
+    }, { passive: true });
+
+    card.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      const touch = e.touches[0];
+      const diffX = touch.clientX - startX;
+      const diffY = touch.clientY - startY;
+
+      // Determine direction on first significant movement
+      if (isHorizontal === null && (Math.abs(diffX) > 8 || Math.abs(diffY) > 8)) {
+        isHorizontal = Math.abs(diffX) > Math.abs(diffY);
+        if (!isHorizontal) {
+          isDragging = false;
+          return;
+        }
+      }
+
+      if (!isHorizontal) return;
+
+      e.preventDefault();
+      currentX = diffX;
+
+      // Apply dampened transform
+      const damped = currentX * 0.8;
+      card.style.transform = `translateX(${damped}px)`;
+
+      // Show appropriate background with progressive opacity
+      const progress = Math.min(Math.abs(damped) / THRESHOLD, 1);
+      if (currentX < 0) {
+        bgDelete.style.opacity = progress;
+        bgEdit.style.opacity = 0;
+      } else {
+        bgEdit.style.opacity = progress;
+        bgDelete.style.opacity = 0;
+      }
+    }, { passive: false });
+
+    card.addEventListener('touchend', () => {
+      if (!isDragging || !isHorizontal) {
+        isDragging = false;
+        return;
+      }
+      isDragging = false;
+
+      const damped = currentX * 0.8;
+
+      if (Math.abs(damped) >= THRESHOLD) {
+        // Action triggered
+        if (currentX < 0) {
+          // Delete
+          card.classList.add('swiped-away');
+          card.style.transform = `translateX(${-window.innerWidth}px)`;
+          setTimeout(() => {
+            socket.emit('delete-own-question', { slug, questionId: qId, nickname });
+          }, 300);
+        } else {
+          // Edit
+          card.classList.add('snapping');
+          card.style.transform = 'translateX(0)';
+          bgEdit.style.opacity = 0;
+          editingQuestionId = qId;
+          renderQuestions(lastQuestions);
+        }
+      } else {
+        // Snap back with spring
+        card.classList.add('snapping');
+        card.style.transform = 'translateX(0)';
+        bgDelete.style.opacity = 0;
+        bgEdit.style.opacity = 0;
+      }
+    });
+  });
 }
 
 // Socket events
@@ -156,6 +339,7 @@ socket.on('connect', () => {
 });
 
 socket.on('questions-updated', ({ questions }) => {
+  lastQuestions = questions;
   renderQuestions(questions);
 });
 
