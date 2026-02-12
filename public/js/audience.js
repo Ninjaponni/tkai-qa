@@ -112,7 +112,7 @@ function renderQuestions(questions) {
   let hintShownThisRender = false;
 
   activeQuestions.forEach(q => {
-    const isOwn = nickname && q.nickname === nickname;
+    const isOwn = q.visitor_id && q.visitor_id === visitorId;
     const isNew = !knownQuestionIds.has(q.id);
     const statusClass = q.status === 'focused' ? 'question-focused' : q.status === 'answered' ? 'question-answered' : '';
     const hasVoted = votedQuestions.includes(q.id);
@@ -206,7 +206,7 @@ function renderQuestions(questions) {
       const textarea = btn.closest('.question-card').querySelector('.edit-area');
       const newText = textarea.value.trim();
       if (!newText) return;
-      socket.emit('edit-question', { slug, questionId: qId, newText, nickname });
+      socket.emit('edit-question', { slug, questionId: qId, newText, visitorId });
       editingQuestionId = null;
     });
   });
@@ -315,7 +315,7 @@ function initSwipeHandlers() {
           card.classList.add('swiped-away');
           card.style.transform = `translateX(${-window.innerWidth}px)`;
           setTimeout(() => {
-            socket.emit('delete-own-question', { slug, questionId: qId, nickname });
+            socket.emit('delete-own-question', { slug, questionId: qId, visitorId });
           }, 300);
         } else {
           // Edit — slide off to the right, then show edit mode

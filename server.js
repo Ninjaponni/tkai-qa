@@ -29,8 +29,8 @@ cleanupOldSessions();
 
 // --- Helper: broadcast updated questions ---
 function broadcastQuestions(slug, sessionId) {
-  const questions = stmts.getQuestionsWithAnswered.all(sessionId);
   const allQuestions = stmts.getAllQuestions.all(sessionId);
+  const questions = allQuestions.filter(q => q.status !== 'hidden');
   io.to(slug).emit('questions-updated', { questions, allQuestions });
 }
 
@@ -42,20 +42,32 @@ app.post('/api/sessions', (req, res) => {
   if (!title || !speaker) {
     return res.status(400).json({ error: 'Tittel og foredragsholder er påkrevd.' });
   }
+  if (title.length > 120) {
+    return res.status(400).json({ error: 'Tittelen kan ikke være lengre enn 120 tegn.' });
+  }
+  if (speaker.length > 80) {
+    return res.status(400).json({ error: 'Navnet kan ikke være lengre enn 80 tegn.' });
+  }
 
   const base = title
     .toLowerCase()
     .replace(/[æ]/g, 'ae').replace(/[ø]/g, 'o').replace(/[å]/g, 'aa')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
-  const slug = `${base}-${uuidv4().slice(0, 6)}`;
 
-  try {
-    stmts.createSession.run(slug, title, speaker, speakerImage || null);
-    const session = stmts.getSessionBySlug.get(slug);
-    res.json(session);
-  } catch (err) {
-    res.status(500).json({ error: 'Kunne ikke opprette sesjon.' });
+  // Retry with longer suffix on collision
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const suffix = uuidv4().slice(0, 6 + attempt);
+    const slug = `${base}-${suffix}`;
+    try {
+      stmts.createSession.run(slug, title, speaker, speakerImage || null);
+      const session = stmts.getSessionBySlug.get(slug);
+      return res.json(session);
+    } catch (err) {
+      if (attempt === 4) {
+        return res.status(500).json({ error: 'Kunne ikke opprette sesjon.' });
+      }
+    }
   }
 });
 
@@ -91,8 +103,8 @@ io.on('connection', (socket) => {
     // Send current questions immediately
     const session = stmts.getSessionBySlug.get(slug);
     if (session) {
-      const questions = stmts.getQuestionsWithAnswered.all(session.id);
       const allQuestions = stmts.getAllQuestions.all(session.id);
+      const questions = allQuestions.filter(q => q.status !== 'hidden');
       socket.emit('questions-updated', { questions, allQuestions });
     }
   });
@@ -117,7 +129,7 @@ io.on('connection', (socket) => {
     }
 
     const nick = nickname || generateNickname();
-    stmts.createQuestion.run(session.id, text.trim(), nick);
+    stmts.createQuestion.run(session.id, text.trim(), nick, visitorId || null);
 
     broadcastQuestions(slug, session.id);
     // Send nickname back to the sender
@@ -193,12 +205,12 @@ io.on('connection', (socket) => {
     broadcastQuestions(slug, session.id);
   });
 
-  socket.on('edit-question', ({ slug, questionId, newText, nickname }) => {
+  socket.on('edit-question', ({ slug, questionId, newText, visitorId }) => {
     const question = stmts.getQuestion.get(questionId);
     if (!question) return;
 
     // Only the author can edit their own question
-    if (question.nickname !== nickname) {
+    if (!visitorId || question.visitor_id !== visitorId) {
       socket.emit('error-message', 'Du kan bare redigere dine egne spørsmål.');
       return;
     }
@@ -227,12 +239,12 @@ io.on('connection', (socket) => {
     broadcastQuestions(slug, session.id);
   });
 
-  socket.on('delete-own-question', ({ slug, questionId, nickname }) => {
+  socket.on('delete-own-question', ({ slug, questionId, visitorId }) => {
     const question = stmts.getQuestion.get(questionId);
     if (!question) return;
 
     // Only the author can delete their own question
-    if (question.nickname !== nickname) {
+    if (!visitorId || question.visitor_id !== visitorId) {
       socket.emit('error-message', 'Du kan bare slette dine egne spørsmål.');
       return;
     }

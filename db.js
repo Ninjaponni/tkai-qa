@@ -23,6 +23,7 @@ db.exec(`
     session_id INTEGER NOT NULL,
     text TEXT NOT NULL,
     nickname TEXT NOT NULL,
+    visitor_id TEXT,
     upvotes INTEGER DEFAULT 0,
     status TEXT DEFAULT 'active',
     created_at TEXT DEFAULT (datetime('now')),
@@ -36,7 +37,19 @@ db.exec(`
     FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
     UNIQUE(question_id, visitor_id)
   );
+
+  CREATE INDEX IF NOT EXISTS idx_questions_session ON questions(session_id, status);
+  CREATE INDEX IF NOT EXISTS idx_questions_created ON questions(created_at);
+  CREATE INDEX IF NOT EXISTS idx_sessions_slug ON sessions(slug);
+  CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions(created_at);
 `);
+
+// Migration: add visitor_id column if missing (existing databases)
+try {
+  db.exec(`ALTER TABLE questions ADD COLUMN visitor_id TEXT`);
+} catch (e) {
+  // Column already exists, ignore
+}
 
 // Prepared statements
 const stmts = {
@@ -47,15 +60,7 @@ const stmts = {
     'SELECT * FROM sessions WHERE slug = ?'
   ),
   createQuestion: db.prepare(
-    'INSERT INTO questions (session_id, text, nickname) VALUES (?, ?, ?)'
-  ),
-  getQuestions: db.prepare(
-    `SELECT * FROM questions WHERE session_id = ? AND status NOT IN ('hidden', 'answered')
-     ORDER BY CASE status WHEN 'focused' THEN 0 ELSE 1 END, upvotes DESC, created_at DESC`
-  ),
-  getQuestionsWithAnswered: db.prepare(
-    `SELECT * FROM questions WHERE session_id = ? AND status != 'hidden'
-     ORDER BY CASE status WHEN 'focused' THEN 0 WHEN 'active' THEN 1 WHEN 'answered' THEN 2 ELSE 3 END, upvotes DESC, created_at DESC`
+    'INSERT INTO questions (session_id, text, nickname, visitor_id) VALUES (?, ?, ?, ?)'
   ),
   getAllQuestions: db.prepare(
     `SELECT * FROM questions WHERE session_id = ?
