@@ -44,11 +44,13 @@ async function loadSession() {
   // Generate QR code for audience URL
   const audienceUrl = `${window.location.origin}/s/${slug}`;
   try {
-    if (typeof QRCode !== 'undefined') {
-      QRCode.toCanvas(document.getElementById('qr-canvas'), audienceUrl, {
-        width: 200,
-        margin: 1,
-        color: { dark: '#040308', light: '#ffffff' },
+    if (typeof QRious !== 'undefined') {
+      new QRious({
+        element: document.getElementById('qr-canvas'),
+        value: audienceUrl,
+        size: 200,
+        foreground: '#040308',
+        background: '#ffffff',
       });
     }
   } catch(e) {
