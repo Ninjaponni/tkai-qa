@@ -43,12 +43,16 @@ async function loadSession() {
 
   // Generate QR code for audience URL
   const audienceUrl = `${window.location.origin}/s/${slug}`;
-  if (typeof QRCode !== 'undefined') {
-    QRCode.toCanvas(document.getElementById('qr-canvas'), audienceUrl, {
-      width: 200,
-      margin: 1,
-      color: { dark: '#040308', light: '#ffffff' },
-    });
+  try {
+    if (typeof QRCode !== 'undefined') {
+      QRCode.toCanvas(document.getElementById('qr-canvas'), audienceUrl, {
+        width: 200,
+        margin: 1,
+        color: { dark: '#040308', light: '#ffffff' },
+      });
+    }
+  } catch(e) {
+    console.warn('QR code generation failed:', e);
   }
 }
 

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TKAI QA – Opprett sesjon</title>
   <link rel="stylesheet" href="/css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -121,11 +121,15 @@
       document.getElementById('go-speaker').href = `/s/${session.slug}/speaker`;
 
       // Generate QR code
-      QRCode.toCanvas(document.getElementById('qr-canvas'), audienceUrl, {
-        width: 200,
-        margin: 1,
-        color: { dark: '#040308', light: '#ffffff' },
-      });
+      try {
+        QRCode.toCanvas(document.getElementById('qr-canvas'), audienceUrl, {
+          width: 200,
+          margin: 1,
+          color: { dark: '#040308', light: '#ffffff' },
+        });
+      } catch(e) {
+        document.getElementById('qr-section').style.display = 'none';
+      }
 
       createSection.style.display = 'none';
       linksSection.style.display = 'block';
