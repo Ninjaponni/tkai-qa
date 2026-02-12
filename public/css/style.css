@@ -81,6 +81,16 @@ body {
   opacity: 0.5;
 }
 
+.site-footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.site-footer a:hover {
+  color: var(--accent-light);
+}
+
 .tagline {
   color: var(--text-muted);
   font-size: 1.05rem;

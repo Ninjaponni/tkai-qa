@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TKAI QA – Opprett sesjon</title>
   <link rel="stylesheet" href="/css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
 </head>
 <body>
   <canvas id="particles-canvas"></canvas>
@@ -43,11 +42,6 @@
       <h2>Sesjonen er opprettet!</h2>
       <p class="session-title-display" id="session-title"></p>
 
-      <div class="qr-section" id="qr-section">
-        <canvas id="qr-canvas"></canvas>
-        <p class="qr-label">Skann med mobilen for å stille spørsmål</p>
-      </div>
-
       <div class="link-group">
         <label>Publikumslenke <span class="hint">(del med publikum)</span></label>
         <div class="link-box">
@@ -72,7 +66,7 @@
       <button class="btn btn-text" onclick="resetForm()">Opprett en ny sesjon</button>
     </section>
 
-    <footer class="site-footer">utviklet av Superponni.no</footer>
+    <footer class="site-footer">utviklet av <a href="https://www.superponni.no" target="_blank" rel="noopener">Superponni.no</a></footer>
   </div>
 
   <script>
@@ -122,19 +116,6 @@
       document.getElementById('speaker-link').value = `${base}/s/${session.slug}/speaker`;
       document.getElementById('go-audience').href = `/s/${session.slug}`;
       document.getElementById('go-speaker').href = `/s/${session.slug}/speaker`;
-
-      // Generate QR code
-      try {
-        new QRious({
-          element: document.getElementById('qr-canvas'),
-          value: audienceUrl,
-          size: 200,
-          foreground: '#040308',
-          background: '#ffffff',
-        });
-      } catch(e) {
-        document.getElementById('qr-section').style.display = 'none';
-      }
 
       createSection.style.display = 'none';
       linksSection.style.display = 'block';
