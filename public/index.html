@@ -59,8 +59,8 @@
       </div>
 
       <div class="link-actions">
-        <a id="go-audience" href="#" class="btn btn-secondary">Publikumsvisning</a>
-        <a id="go-speaker" href="#" class="btn btn-primary">Foredragsholdervisning</a>
+        <a id="go-audience" href="#" target="_blank" class="btn btn-secondary">Publikumsvisning</a>
+        <a id="go-speaker" href="#" target="_blank" class="btn btn-primary">Foredragsholdervisning</a>
       </div>
 
       <button class="btn btn-text" onclick="resetForm()">Opprett en ny sesjon</button>
@@ -126,15 +126,20 @@
       const base = window.location.origin;
       const audienceUrl = `${base}/s/${session.slug}`;
 
-      document.getElementById('session-title').textContent = `"${session.title}" av ${session.speaker}`;
-      document.getElementById('audience-link').value = audienceUrl;
-      document.getElementById('speaker-link').value = `${base}/s/${session.slug}/speaker`;
-      document.getElementById('go-audience').href = `/s/${session.slug}`;
-      document.getElementById('go-speaker').href = `/s/${session.slug}/speaker`;
+      showSession(session.slug, session.title, session.speaker);
+      localStorage.setItem('tkai-last-session', JSON.stringify({ slug: session.slug, title: session.title, speaker: session.speaker }));
+    });
 
+    function showSession(slug, title, speaker) {
+      const base = window.location.origin;
+      document.getElementById('session-title').textContent = `"${title}" av ${speaker}`;
+      document.getElementById('audience-link').value = `${base}/s/${slug}`;
+      document.getElementById('speaker-link').value = `${base}/s/${slug}/speaker`;
+      document.getElementById('go-audience').href = `/s/${slug}`;
+      document.getElementById('go-speaker').href = `/s/${slug}/speaker`;
       createSection.style.display = 'none';
       linksSection.style.display = 'block';
-    });
+    }
 
     function copyLink(inputId) {
       const input = document.getElementById(inputId);
@@ -151,6 +156,13 @@
       form.reset();
       speakerImageBase64 = null;
       imagePreview.innerHTML = '<span class="image-preview-placeholder">Last opp</span>';
+      localStorage.removeItem('tkai-last-session');
+    }
+
+    // Restore last session on page load
+    const lastSession = JSON.parse(localStorage.getItem('tkai-last-session') || 'null');
+    if (lastSession) {
+      showSession(lastSession.slug, lastSession.title, lastSession.speaker);
     }
   </script>
   <script src="/js/particles.js"></script>
