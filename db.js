@@ -58,7 +58,7 @@ db.exec(`
     value INTEGER DEFAULT 0
   )
 `);
-db.prepare(`INSERT OR IGNORE INTO counters (key, value) VALUES ('total_sessions', 0)`).run();
+db.prepare(`INSERT OR IGNORE INTO counters (key, value) VALUES ('total_sessions', 56)`).run();
 
 // Prepared statements
 const stmts = {
