@@ -51,6 +51,15 @@ try {
   // Column already exists, ignore
 }
 
+// Persistent all-time session counter (never deleted by cleanup)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS counters (
+    key TEXT PRIMARY KEY,
+    value INTEGER DEFAULT 0
+  )
+`);
+db.prepare(`INSERT OR IGNORE INTO counters (key, value) VALUES ('total_sessions', 0)`).run();
+
 // Prepared statements
 const stmts = {
   createSession: db.prepare(
@@ -104,6 +113,12 @@ const stmts = {
   ),
   deleteQuestionsBySession: db.prepare(
     'DELETE FROM questions WHERE session_id = ?'
+  ),
+  getSessionCount: db.prepare(
+    `SELECT value FROM counters WHERE key = 'total_sessions'`
+  ),
+  incrementSessionCount: db.prepare(
+    `UPDATE counters SET value = value + 1 WHERE key = 'total_sessions'`
   ),
 };
 

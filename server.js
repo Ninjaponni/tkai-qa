@@ -61,6 +61,7 @@ app.post('/api/sessions', (req, res) => {
     const slug = `${base}-${suffix}`;
     try {
       stmts.createSession.run(slug, title, speaker, speakerImage || null);
+      stmts.incrementSessionCount.run();
       const session = stmts.getSessionBySlug.get(slug);
       return res.json(session);
     } catch (err) {
@@ -78,6 +79,12 @@ app.get('/api/sessions/:slug', (req, res) => {
     return res.status(404).json({ error: 'Sesjon ikke funnet.' });
   }
   res.json(session);
+});
+
+// Stats – total sessions ever created
+app.get('/api/stats', (req, res) => {
+  const row = stmts.getSessionCount.get();
+  res.json({ totalSessions: row ? row.value : 0 });
 });
 
 // Generate a nickname
