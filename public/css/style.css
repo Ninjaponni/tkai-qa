@@ -140,6 +140,13 @@ header#session-header h1 {
   gap: 12px;
 }
 
+.header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 /* Badge-label: non-interactive label (not a button) */
 .badge-label {
   font-size: 0.7rem;
@@ -433,6 +440,7 @@ textarea {
 .qr-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
   flex-wrap: wrap;
 }

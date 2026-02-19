@@ -19,7 +19,10 @@
             <span class="speaker-name" id="speaker-name"></span>
           </div>
         </div>
-        <span class="badge-label">Foredragsholder</span>
+        <div class="header-actions">
+          <span class="badge-label">Foredragsholder</span>
+          <button class="btn btn-primary btn-small" id="show-qr-btn" onclick="toggleQR()">Vis QR-kode</button>
+        </div>
       </div>
     </header>
 
@@ -30,7 +33,7 @@
         <p class="qr-label">Skann for å stille spørsmål</p>
       </div>
       <div class="qr-actions">
-        <button class="btn btn-text" id="copy-link-btn" onclick="copyAudienceLink()">Kopier lenke</button>
+        <button class="btn btn-text" id="copy-link-btn" onclick="copyAudienceLink()">Kopier publikumslenke</button>
       </div>
     </section>
 
@@ -46,10 +49,7 @@
     </section>
 
     <section id="questions-section">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-        <h2>Spørsmål <span class="question-count" id="question-count">(0)</span></h2>
-        <button class="btn btn-primary btn-small" id="show-qr-btn" onclick="toggleQR()">Vis QR-kode</button>
-      </div>
+      <h2 style="margin-bottom:16px;">Spørsmål <span class="question-count" id="question-count">(0)</span></h2>
 
       <div class="filter-bar">
         <button class="btn btn-filter active" data-filter="all">Alle</button>
@@ -83,11 +83,11 @@
           card.classList.remove('qr-open');
           btn.textContent = 'Vis QR-kode';
           btn.classList.remove('btn-secondary');
-          btn.classList.add('btn-primary', 'btn-small');
+          btn.classList.add('btn-primary');
         } else {
           card.classList.add('qr-open');
           btn.textContent = 'Skjul QR-kode';
-          btn.classList.remove('btn-primary', 'btn-small');
+          btn.classList.remove('btn-primary');
           btn.classList.add('btn-secondary');
         }
         btn.classList.remove('btn-toggling');
