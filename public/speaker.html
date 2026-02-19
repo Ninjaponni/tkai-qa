@@ -30,7 +30,6 @@
         <p class="qr-label">Skann for å stille spørsmål</p>
       </div>
       <div class="qr-actions">
-        <button class="btn btn-secondary" onclick="toggleQR(false)">Skjul QR-kode</button>
         <button class="btn btn-text" id="copy-link-btn" onclick="copyAudienceLink()">Kopier lenke</button>
       </div>
     </section>
@@ -49,7 +48,7 @@
     <section id="questions-section">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
         <h2>Spørsmål <span class="question-count" id="question-count">(0)</span></h2>
-        <button class="btn btn-small" id="show-qr-btn" onclick="toggleQR(true)">Vis QR-kode</button>
+        <button class="btn btn-primary btn-small" id="show-qr-btn" onclick="toggleQR()">Vis QR-kode</button>
       </div>
 
       <div class="filter-bar">
@@ -72,16 +71,27 @@
   <script src="/js/particles.js"></script>
   <script src="/js/speaker.js"></script>
   <script>
-    function toggleQR(show) {
+    function toggleQR() {
       const card = document.getElementById('qr-card');
       const btn = document.getElementById('show-qr-btn');
-      if (show) {
-        card.classList.add('qr-open');
-        btn.style.display = 'none';
-      } else {
-        card.classList.remove('qr-open');
-        btn.style.display = '';
-      }
+      const isOpen = card.classList.contains('qr-open');
+
+      // Fade + scale ut, byt tekst/stil, fade inn igjen
+      btn.classList.add('btn-toggling');
+      setTimeout(() => {
+        if (isOpen) {
+          card.classList.remove('qr-open');
+          btn.textContent = 'Vis QR-kode';
+          btn.classList.remove('btn-secondary');
+          btn.classList.add('btn-primary', 'btn-small');
+        } else {
+          card.classList.add('qr-open');
+          btn.textContent = 'Skjul QR-kode';
+          btn.classList.remove('btn-primary', 'btn-small');
+          btn.classList.add('btn-secondary');
+        }
+        btn.classList.remove('btn-toggling');
+      }, 120);
     }
   </script>
 </body>

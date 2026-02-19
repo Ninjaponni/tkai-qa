@@ -325,7 +325,6 @@ textarea {
   color: var(--text-muted);
   padding: 8px 0;
   font-size: 0.9rem;
-  margin-top: 12px;
 }
 
 .btn-text:hover {
@@ -436,6 +435,14 @@ textarea {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+#show-qr-btn {
+  transition: opacity 0.12s ease, transform 0.12s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+#show-qr-btn.btn-toggling {
+  opacity: 0.2;
+  transform: scale(0.94);
 }
 
 /* === Questions List === */
