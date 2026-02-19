@@ -38,46 +38,14 @@
       </form>
     </section>
 
-    <section id="links-section" class="card" style="display: none;">
-      <h2>Sesjonen er opprettet!</h2>
-      <p class="session-title-display" id="session-title"></p>
-
-      <div class="link-group">
-        <label>Publikumslenke <span class="hint">(del med publikum)</span></label>
-        <div class="link-box">
-          <input type="text" id="audience-link" readonly>
-          <button class="btn btn-small" onclick="copyLink('audience-link')">Kopier</button>
-        </div>
-      </div>
-
-      <div class="link-group">
-        <label>Foredragsholderlenke <span class="hint">(privat – for deg)</span></label>
-        <div class="link-box">
-          <input type="text" id="speaker-link" readonly>
-          <button class="btn btn-small" onclick="copyLink('speaker-link')">Kopier</button>
-        </div>
-      </div>
-
-      <div class="link-actions">
-        <a id="go-audience" href="#" target="_blank" class="btn btn-secondary">Publikumsvisning</a>
-        <a id="go-speaker" href="#" target="_blank" class="btn btn-primary">Foredragsholdervisning</a>
-      </div>
-
-      <p class="help-text">Del publikumslenken med salen — de kan stille spørsmål og stemme på andres. Bruk foredragsholdervisningen til å se spørsmål, fokusere ett av gangen på storskjerm, og markere som besvart.</p>
-
-      <button class="btn btn-text" onclick="resetForm()">Opprett en ny sesjon</button>
-    </section>
 
     <footer class="site-footer">utviklet av <a href="https://www.superponni.no" target="_blank" rel="noopener">Superponni.no</a></footer>
   </div>
 
   <script>
     const form = document.getElementById('create-form');
-    const createSection = document.getElementById('create-section');
-    const linksSection = document.getElementById('links-section');
     const imageInput = document.getElementById('image-input');
     const imagePreview = document.getElementById('image-preview');
-    const imagePlaceholder = document.getElementById('image-placeholder');
     let speakerImageBase64 = null;
 
     // Resize image to max 256x256 before upload
@@ -102,7 +70,6 @@
     imageInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
       const resized = await resizeImage(file, 256);
       speakerImageBase64 = resized;
       imagePreview.innerHTML = `<img src="${resized}" alt="Preview">`;
@@ -113,6 +80,10 @@
       const title = document.getElementById('title').value.trim();
       const speaker = document.getElementById('speaker').value.trim();
 
+      const btn = form.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = 'Oppretter...';
+
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -121,51 +92,15 @@
 
       if (!res.ok) {
         alert('Noe gikk galt. Prøv igjen.');
+        btn.disabled = false;
+        btn.textContent = 'Opprett sesjon';
         return;
       }
 
       const session = await res.json();
-      const base = window.location.origin;
-      const audienceUrl = `${base}/s/${session.slug}`;
-
-      showSession(session.slug, session.title, session.speaker);
-      localStorage.setItem('tkai-last-session', JSON.stringify({ slug: session.slug, title: session.title, speaker: session.speaker }));
+      localStorage.setItem('tkai-last-session', JSON.stringify({ slug: session.slug }));
+      window.location.href = `/s/${session.slug}/speaker`;
     });
-
-    function showSession(slug, title, speaker) {
-      const base = window.location.origin;
-      document.getElementById('session-title').textContent = `"${title}" av ${speaker}`;
-      document.getElementById('audience-link').value = `${base}/s/${slug}`;
-      document.getElementById('speaker-link').value = `${base}/s/${slug}/speaker`;
-      document.getElementById('go-audience').href = `/s/${slug}`;
-      document.getElementById('go-speaker').href = `/s/${slug}/speaker`;
-      createSection.style.display = 'none';
-      linksSection.style.display = 'block';
-    }
-
-    function copyLink(inputId) {
-      const input = document.getElementById(inputId);
-      input.select();
-      navigator.clipboard.writeText(input.value);
-      const btn = input.nextElementSibling;
-      btn.textContent = 'Kopiert!';
-      setTimeout(() => btn.textContent = 'Kopier', 2000);
-    }
-
-    function resetForm() {
-      createSection.style.display = 'block';
-      linksSection.style.display = 'none';
-      form.reset();
-      speakerImageBase64 = null;
-      imagePreview.innerHTML = '<span class="image-preview-placeholder">Last opp</span>';
-      localStorage.removeItem('tkai-last-session');
-    }
-
-    // Restore last session on page load
-    const lastSession = JSON.parse(localStorage.getItem('tkai-last-session') || 'null');
-    if (lastSession) {
-      showSession(lastSession.slug, lastSession.title, lastSession.speaker);
-    }
   </script>
   <script src="/js/version.js"></script>
   <script src="/js/particles.js"></script>

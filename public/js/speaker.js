@@ -7,6 +7,7 @@ const slug = pathParts[slugIndex];
 
 let allQuestions = [];
 let currentFilter = 'all';
+let audienceUrl = '';
 let previousQuestionCount = 0;
 let focusedQuestionId = null;
 const baseTitle = 'TKAI QA – Foredragsholder';
@@ -42,7 +43,7 @@ async function loadSession() {
   }
 
   // Generate QR code for audience URL
-  const audienceUrl = `${window.location.origin}/s/${slug}`;
+  audienceUrl = `${window.location.origin}/s/${slug}`;
   try {
     if (typeof QRious !== 'undefined') {
       new QRious({
@@ -289,6 +290,15 @@ function statusLabel(status) {
     case 'hidden': return 'Skjult';
     default: return 'Aktiv';
   }
+}
+
+// Kopier publikumslenke til clipboard (fallback hvis QR ikke fungerer)
+function copyAudienceLink() {
+  if (!audienceUrl) return;
+  navigator.clipboard.writeText(audienceUrl);
+  const btn = document.getElementById('copy-link-btn');
+  btn.textContent = 'Kopiert!';
+  setTimeout(() => btn.textContent = 'Kopier lenke', 2000);
 }
 
 // Init

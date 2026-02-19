@@ -431,6 +431,13 @@ textarea {
   margin-top: 12px;
 }
 
+.qr-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 /* === Questions List === */
 .questions-list {
   display: flex;

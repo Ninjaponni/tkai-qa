@@ -29,7 +29,10 @@
         <canvas id="qr-canvas"></canvas>
         <p class="qr-label">Skann for å stille spørsmål</p>
       </div>
-      <button class="btn btn-primary" onclick="toggleQR(false)">Skjul QR-kode</button>
+      <div class="qr-actions">
+        <button class="btn btn-primary" onclick="toggleQR(false)">Skjul QR-kode</button>
+        <button class="btn btn-small" id="copy-link-btn" onclick="copyAudienceLink()">Kopier lenke</button>
+      </div>
     </section>
 
     <section id="focus-overlay" class="focus-overlay" style="display:none;">
