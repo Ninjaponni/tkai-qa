@@ -17,11 +17,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Auto-cleanup: delete sessions older than 24 hours ---
 async function cleanupOldSessions() {
-  const old = await stmts.getOldSessionIds.all();
-  for (const { id } of old) {
-    await stmts.deleteQuestionsBySession.run(id);
+  try {
+    const old = await stmts.getOldSessionIds.all();
+    for (const { id } of old) {
+      await stmts.deleteQuestionsBySession.run(id);
+    }
+    await stmts.deleteOldSessions.run();
+  } catch (err) {
+    console.error('Cleanup failed:', err);
   }
-  await stmts.deleteOldSessions.run();
 }
 
 // --- Helper: broadcast updated questions ---
@@ -118,168 +122,211 @@ app.get('/s/:slug/speaker', (req, res) => {
 
 io.on('connection', (socket) => {
   socket.on('join-session', async (slug) => {
-    socket.join(slug);
-    const session = await stmts.getSessionBySlug.get(slug);
-    if (session) {
-      const allQuestions = await stmts.getAllQuestions.all(session.id);
-      const questions = allQuestions.filter(q => q.status !== 'hidden');
-      socket.emit('questions-updated', { questions, allQuestions });
+    try {
+      socket.join(slug);
+      const session = await stmts.getSessionBySlug.get(slug);
+      if (session) {
+        const allQuestions = await stmts.getAllQuestions.all(session.id);
+        const questions = allQuestions.filter(q => q.status !== 'hidden');
+        socket.emit('questions-updated', { questions, allQuestions });
+      }
+    } catch (err) {
+      console.error('Error in join-session:', err);
     }
   });
 
   socket.on('new-question', async ({ slug, text, visitorId, nickname }) => {
-    const session = await stmts.getSessionBySlug.get(slug);
-    if (!session) return;
+    try {
+      const session = await stmts.getSessionBySlug.get(slug);
+      if (!session) return;
 
-    if (!text || text.trim().length === 0) {
-      socket.emit('error-message', 'Spørsmålet kan ikke være tomt.');
-      return;
+      if (!text || text.trim().length === 0) {
+        socket.emit('error-message', 'Spørsmålet kan ikke være tomt.');
+        return;
+      }
+
+      if (text.trim().length > 500) {
+        socket.emit('error-message', 'Spørsmålet er for langt (maks 500 tegn).');
+        return;
+      }
+
+      if (isProfane(text)) {
+        socket.emit('error-message', 'Spørsmålet inneholder upassende språk. Vennligst omformuler.');
+        return;
+      }
+
+      const nick = nickname || generateNickname();
+      await stmts.createQuestion.run(session.id, text.trim(), nick, visitorId || null);
+
+      await broadcastQuestions(slug, session.id);
+      socket.emit('nickname-assigned', nick);
+    } catch (err) {
+      console.error('Error in new-question:', err);
+      socket.emit('error-message', 'Noe gikk galt. Prøv igjen.');
     }
-
-    if (text.trim().length > 500) {
-      socket.emit('error-message', 'Spørsmålet er for langt (maks 500 tegn).');
-      return;
-    }
-
-    if (isProfane(text)) {
-      socket.emit('error-message', 'Spørsmålet inneholder upassende språk. Vennligst omformuler.');
-      return;
-    }
-
-    const nick = nickname || generateNickname();
-    await stmts.createQuestion.run(session.id, text.trim(), nick, visitorId || null);
-
-    await broadcastQuestions(slug, session.id);
-    socket.emit('nickname-assigned', nick);
   });
 
   socket.on('upvote', async ({ slug, questionId, visitorId }) => {
-    const question = await stmts.getQuestion.get(questionId);
-    if (!question) return;
+    try {
+      const question = await stmts.getQuestion.get(questionId);
+      if (!question) return;
 
-    const already = await stmts.hasVoted.get(questionId, visitorId);
-    if (already) {
-      socket.emit('error-message', 'Du har allerede stemt på dette spørsmålet.');
-      return;
+      const already = await stmts.hasVoted.get(questionId, visitorId);
+      if (already) {
+        socket.emit('error-message', 'Du har allerede stemt på dette spørsmålet.');
+        return;
+      }
+
+      await stmts.addVote.run(questionId, visitorId);
+      await stmts.upvoteQuestion.run(questionId);
+
+      const session = await stmts.getSessionBySlug.get(slug);
+      if (!session) return;
+      await broadcastQuestions(slug, session.id);
+    } catch (err) {
+      console.error('Error in upvote:', err);
     }
-
-    await stmts.addVote.run(questionId, visitorId);
-    await stmts.upvoteQuestion.run(questionId);
-
-    const session = await stmts.getSessionBySlug.get(slug);
-    if (!session) return;
-    await broadcastQuestions(slug, session.id);
   });
 
   socket.on('focus-question', async ({ slug, questionId }) => {
-    const question = await stmts.getQuestion.get(questionId);
-    if (!question) return;
+    try {
+      const question = await stmts.getQuestion.get(questionId);
+      if (!question) return;
 
-    await stmts.unfocusAll.run(question.session_id);
-    await stmts.setQuestionStatus.run('focused', questionId);
+      await stmts.unfocusAll.run(question.session_id);
+      await stmts.setQuestionStatus.run('focused', questionId);
 
-    const session = await stmts.getSessionBySlug.get(slug);
-    if (!session) return;
+      const session = await stmts.getSessionBySlug.get(slug);
+      if (!session) return;
 
-    await broadcastQuestions(slug, session.id);
-    const focused = await stmts.getQuestion.get(questionId);
-    io.to(slug).emit('question-focused', focused);
+      await broadcastQuestions(slug, session.id);
+      const focused = await stmts.getQuestion.get(questionId);
+      io.to(slug).emit('question-focused', focused);
+    } catch (err) {
+      console.error('Error in focus-question:', err);
+    }
   });
 
   socket.on('unfocus-question', async ({ slug, questionId }) => {
-    const question = await stmts.getQuestion.get(questionId);
-    if (!question) return;
+    try {
+      const question = await stmts.getQuestion.get(questionId);
+      if (!question) return;
 
-    await stmts.setQuestionStatus.run('active', questionId);
+      await stmts.setQuestionStatus.run('active', questionId);
 
-    const session = await stmts.getSessionBySlug.get(slug);
-    if (!session) return;
+      const session = await stmts.getSessionBySlug.get(slug);
+      if (!session) return;
 
-    await broadcastQuestions(slug, session.id);
-    io.to(slug).emit('question-unfocused');
+      await broadcastQuestions(slug, session.id);
+      io.to(slug).emit('question-unfocused');
+    } catch (err) {
+      console.error('Error in unfocus-question:', err);
+    }
   });
 
   socket.on('answer-question', async ({ slug, questionId }) => {
-    const question = await stmts.getQuestion.get(questionId);
-    if (!question) return;
+    try {
+      const question = await stmts.getQuestion.get(questionId);
+      if (!question) return;
 
-    await stmts.setQuestionStatus.run('answered', questionId);
+      await stmts.setQuestionStatus.run('answered', questionId);
 
-    const session = await stmts.getSessionBySlug.get(slug);
-    if (!session) return;
+      const session = await stmts.getSessionBySlug.get(slug);
+      if (!session) return;
 
-    await broadcastQuestions(slug, session.id);
-    io.to(slug).emit('question-unfocused');
+      await broadcastQuestions(slug, session.id);
+      io.to(slug).emit('question-unfocused');
+    } catch (err) {
+      console.error('Error in answer-question:', err);
+    }
   });
 
   socket.on('hide-question', async ({ slug, questionId }) => {
-    const question = await stmts.getQuestion.get(questionId);
-    if (!question) return;
+    try {
+      const question = await stmts.getQuestion.get(questionId);
+      if (!question) return;
 
-    await stmts.setQuestionStatus.run('hidden', questionId);
+      await stmts.setQuestionStatus.run('hidden', questionId);
 
-    const session = await stmts.getSessionBySlug.get(slug);
-    if (!session) return;
-    await broadcastQuestions(slug, session.id);
+      const session = await stmts.getSessionBySlug.get(slug);
+      if (!session) return;
+      await broadcastQuestions(slug, session.id);
+    } catch (err) {
+      console.error('Error in hide-question:', err);
+    }
   });
 
   socket.on('edit-question', async ({ slug, questionId, newText, visitorId }) => {
-    const question = await stmts.getQuestion.get(questionId);
-    if (!question) return;
+    try {
+      const question = await stmts.getQuestion.get(questionId);
+      if (!question) return;
 
-    if (!visitorId || question.visitor_id !== visitorId) {
-      socket.emit('error-message', 'Du kan bare redigere dine egne spørsmål.');
-      return;
+      if (!visitorId || question.visitor_id !== visitorId) {
+        socket.emit('error-message', 'Du kan bare redigere dine egne spørsmål.');
+        return;
+      }
+
+      if (!newText || newText.trim().length === 0) {
+        socket.emit('error-message', 'Spørsmålet kan ikke være tomt.');
+        return;
+      }
+
+      if (newText.trim().length > 500) {
+        socket.emit('error-message', 'Spørsmålet er for langt (maks 500 tegn).');
+        return;
+      }
+
+      if (isProfane(newText)) {
+        socket.emit('error-message', 'Spørsmålet inneholder upassende språk. Vennligst omformuler.');
+        return;
+      }
+
+      await stmts.updateQuestionText.run(newText.trim(), questionId);
+      await stmts.resetVotes.run(questionId);
+      await stmts.deleteVotesForQuestion.run(questionId);
+
+      const session = await stmts.getSessionBySlug.get(slug);
+      if (!session) return;
+      await broadcastQuestions(slug, session.id);
+    } catch (err) {
+      console.error('Error in edit-question:', err);
+      socket.emit('error-message', 'Noe gikk galt. Prøv igjen.');
     }
-
-    if (!newText || newText.trim().length === 0) {
-      socket.emit('error-message', 'Spørsmålet kan ikke være tomt.');
-      return;
-    }
-
-    if (newText.trim().length > 500) {
-      socket.emit('error-message', 'Spørsmålet er for langt (maks 500 tegn).');
-      return;
-    }
-
-    if (isProfane(newText)) {
-      socket.emit('error-message', 'Spørsmålet inneholder upassende språk. Vennligst omformuler.');
-      return;
-    }
-
-    await stmts.updateQuestionText.run(newText.trim(), questionId);
-    await stmts.resetVotes.run(questionId);
-    await stmts.deleteVotesForQuestion.run(questionId);
-
-    const session = await stmts.getSessionBySlug.get(slug);
-    if (!session) return;
-    await broadcastQuestions(slug, session.id);
   });
 
   socket.on('delete-own-question', async ({ slug, questionId, visitorId }) => {
-    const question = await stmts.getQuestion.get(questionId);
-    if (!question) return;
+    try {
+      const question = await stmts.getQuestion.get(questionId);
+      if (!question) return;
 
-    if (!visitorId || question.visitor_id !== visitorId) {
-      socket.emit('error-message', 'Du kan bare slette dine egne spørsmål.');
-      return;
+      if (!visitorId || question.visitor_id !== visitorId) {
+        socket.emit('error-message', 'Du kan bare slette dine egne spørsmål.');
+        return;
+      }
+
+      await stmts.deleteVotesForQuestion.run(questionId);
+      await stmts.deleteQuestion.run(questionId);
+
+      const session = await stmts.getSessionBySlug.get(slug);
+      if (!session) return;
+      await broadcastQuestions(slug, session.id);
+    } catch (err) {
+      console.error('Error in delete-own-question:', err);
+      socket.emit('error-message', 'Noe gikk galt. Prøv igjen.');
     }
-
-    await stmts.deleteVotesForQuestion.run(questionId);
-    await stmts.deleteQuestion.run(questionId);
-
-    const session = await stmts.getSessionBySlug.get(slug);
-    if (!session) return;
-    await broadcastQuestions(slug, session.id);
   });
 
   socket.on('delete-question', async ({ slug, questionId }) => {
-    await stmts.deleteVotesForQuestion.run(questionId);
-    await stmts.deleteQuestion.run(questionId);
+    try {
+      await stmts.deleteVotesForQuestion.run(questionId);
+      await stmts.deleteQuestion.run(questionId);
 
-    const session = await stmts.getSessionBySlug.get(slug);
-    if (!session) return;
-    await broadcastQuestions(slug, session.id);
+      const session = await stmts.getSessionBySlug.get(slug);
+      if (!session) return;
+      await broadcastQuestions(slug, session.id);
+    } catch (err) {
+      console.error('Error in delete-question:', err);
+    }
   });
 });
 
