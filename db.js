@@ -145,7 +145,7 @@ async function initDb() {
     )
   `);
   await client.execute({
-    sql: `INSERT OR IGNORE INTO counters (key, value) VALUES ('total_sessions', 56)`,
+    sql: `INSERT OR IGNORE INTO counters (key, value) VALUES ('total_sessions', 78)`,
     args: [],
   });
 }
