@@ -3,7 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { stmts } = require('./db');
+const { initDb, stmts } = require('./db');
 const { generateNickname } = require('./nicknames');
 const { isProfane, clean } = require('./profanity');
 
@@ -16,20 +16,17 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Auto-cleanup: delete sessions older than 24 hours ---
-function cleanupOldSessions() {
-  const old = stmts.getOldSessionIds.all();
+async function cleanupOldSessions() {
+  const old = await stmts.getOldSessionIds.all();
   for (const { id } of old) {
-    stmts.deleteQuestionsBySession.run(id);
+    await stmts.deleteQuestionsBySession.run(id);
   }
-  stmts.deleteOldSessions.run();
+  await stmts.deleteOldSessions.run();
 }
-// Run cleanup every hour
-setInterval(cleanupOldSessions, 60 * 60 * 1000);
-cleanupOldSessions();
 
 // --- Helper: broadcast updated questions ---
-function broadcastQuestions(slug, sessionId) {
-  const allQuestions = stmts.getAllQuestions.all(sessionId);
+async function broadcastQuestions(slug, sessionId) {
+  const allQuestions = await stmts.getAllQuestions.all(sessionId);
   const questions = allQuestions.filter(q => q.status !== 'hidden');
   io.to(slug).emit('questions-updated', { questions, allQuestions });
 }
@@ -37,54 +34,69 @@ function broadcastQuestions(slug, sessionId) {
 // --- REST API ---
 
 // Create a new session
-app.post('/api/sessions', (req, res) => {
-  const { title, speaker, speakerImage } = req.body;
-  if (!title || !speaker) {
-    return res.status(400).json({ error: 'Tittel og foredragsholder er påkrevd.' });
-  }
-  if (title.length > 120) {
-    return res.status(400).json({ error: 'Tittelen kan ikke være lengre enn 120 tegn.' });
-  }
-  if (speaker.length > 80) {
-    return res.status(400).json({ error: 'Navnet kan ikke være lengre enn 80 tegn.' });
-  }
+app.post('/api/sessions', async (req, res) => {
+  try {
+    const { title, speaker, speakerImage } = req.body;
+    if (!title || !speaker) {
+      return res.status(400).json({ error: 'Tittel og foredragsholder er påkrevd.' });
+    }
+    if (title.length > 120) {
+      return res.status(400).json({ error: 'Tittelen kan ikke være lengre enn 120 tegn.' });
+    }
+    if (speaker.length > 80) {
+      return res.status(400).json({ error: 'Navnet kan ikke være lengre enn 80 tegn.' });
+    }
 
-  const base = title
-    .toLowerCase()
-    .replace(/[æ]/g, 'ae').replace(/[ø]/g, 'o').replace(/[å]/g, 'aa')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+    const base = title
+      .toLowerCase()
+      .replace(/[æ]/g, 'ae').replace(/[ø]/g, 'o').replace(/[å]/g, 'aa')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
 
-  // Retry with longer suffix on collision
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const suffix = uuidv4().slice(0, 6 + attempt);
-    const slug = `${base}-${suffix}`;
-    try {
-      stmts.createSession.run(slug, title, speaker, speakerImage || null);
-      stmts.incrementSessionCount.run();
-      const session = stmts.getSessionBySlug.get(slug);
-      return res.json(session);
-    } catch (err) {
-      if (attempt === 4) {
-        return res.status(500).json({ error: 'Kunne ikke opprette sesjon.' });
+    // Retry with longer suffix on collision
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const suffix = uuidv4().slice(0, 6 + attempt);
+      const slug = `${base}-${suffix}`;
+      try {
+        await stmts.createSession.run(slug, title, speaker, speakerImage || null);
+        await stmts.incrementSessionCount.run();
+        const session = await stmts.getSessionBySlug.get(slug);
+        return res.json(session);
+      } catch (err) {
+        if (attempt === 4) {
+          return res.status(500).json({ error: 'Kunne ikke opprette sesjon.' });
+        }
       }
     }
+  } catch (err) {
+    console.error('Error creating session:', err);
+    res.status(500).json({ error: 'Serverfeil.' });
   }
 });
 
 // Get session by slug
-app.get('/api/sessions/:slug', (req, res) => {
-  const session = stmts.getSessionBySlug.get(req.params.slug);
-  if (!session) {
-    return res.status(404).json({ error: 'Sesjon ikke funnet.' });
+app.get('/api/sessions/:slug', async (req, res) => {
+  try {
+    const session = await stmts.getSessionBySlug.get(req.params.slug);
+    if (!session) {
+      return res.status(404).json({ error: 'Sesjon ikke funnet.' });
+    }
+    res.json(session);
+  } catch (err) {
+    console.error('Error getting session:', err);
+    res.status(500).json({ error: 'Serverfeil.' });
   }
-  res.json(session);
 });
 
 // Stats – total sessions ever created
-app.get('/api/stats', (req, res) => {
-  const row = stmts.getSessionCount.get();
-  res.json({ totalSessions: row ? row.value : 0 });
+app.get('/api/stats', async (req, res) => {
+  try {
+    const row = await stmts.getSessionCount.get();
+    res.json({ totalSessions: row ? row.value : 0 });
+  } catch (err) {
+    console.error('Error getting stats:', err);
+    res.status(500).json({ error: 'Serverfeil.' });
+  }
 });
 
 // Generate a nickname
@@ -105,19 +117,18 @@ app.get('/s/:slug/speaker', (req, res) => {
 // --- Socket.io ---
 
 io.on('connection', (socket) => {
-  socket.on('join-session', (slug) => {
+  socket.on('join-session', async (slug) => {
     socket.join(slug);
-    // Send current questions immediately
-    const session = stmts.getSessionBySlug.get(slug);
+    const session = await stmts.getSessionBySlug.get(slug);
     if (session) {
-      const allQuestions = stmts.getAllQuestions.all(session.id);
+      const allQuestions = await stmts.getAllQuestions.all(session.id);
       const questions = allQuestions.filter(q => q.status !== 'hidden');
       socket.emit('questions-updated', { questions, allQuestions });
     }
   });
 
-  socket.on('new-question', ({ slug, text, visitorId, nickname }) => {
-    const session = stmts.getSessionBySlug.get(slug);
+  socket.on('new-question', async ({ slug, text, visitorId, nickname }) => {
+    const session = await stmts.getSessionBySlug.get(slug);
     if (!session) return;
 
     if (!text || text.trim().length === 0) {
@@ -136,87 +147,86 @@ io.on('connection', (socket) => {
     }
 
     const nick = nickname || generateNickname();
-    stmts.createQuestion.run(session.id, text.trim(), nick, visitorId || null);
+    await stmts.createQuestion.run(session.id, text.trim(), nick, visitorId || null);
 
-    broadcastQuestions(slug, session.id);
-    // Send nickname back to the sender
+    await broadcastQuestions(slug, session.id);
     socket.emit('nickname-assigned', nick);
   });
 
-  socket.on('upvote', ({ slug, questionId, visitorId }) => {
-    const question = stmts.getQuestion.get(questionId);
+  socket.on('upvote', async ({ slug, questionId, visitorId }) => {
+    const question = await stmts.getQuestion.get(questionId);
     if (!question) return;
 
-    const already = stmts.hasVoted.get(questionId, visitorId);
+    const already = await stmts.hasVoted.get(questionId, visitorId);
     if (already) {
       socket.emit('error-message', 'Du har allerede stemt på dette spørsmålet.');
       return;
     }
 
-    stmts.addVote.run(questionId, visitorId);
-    stmts.upvoteQuestion.run(questionId);
+    await stmts.addVote.run(questionId, visitorId);
+    await stmts.upvoteQuestion.run(questionId);
 
-    const session = stmts.getSessionBySlug.get(slug);
+    const session = await stmts.getSessionBySlug.get(slug);
     if (!session) return;
-    broadcastQuestions(slug, session.id);
+    await broadcastQuestions(slug, session.id);
   });
 
-  socket.on('focus-question', ({ slug, questionId }) => {
-    const question = stmts.getQuestion.get(questionId);
+  socket.on('focus-question', async ({ slug, questionId }) => {
+    const question = await stmts.getQuestion.get(questionId);
     if (!question) return;
 
-    stmts.unfocusAll.run(question.session_id);
-    stmts.setQuestionStatus.run('focused', questionId);
+    await stmts.unfocusAll.run(question.session_id);
+    await stmts.setQuestionStatus.run('focused', questionId);
 
-    const session = stmts.getSessionBySlug.get(slug);
+    const session = await stmts.getSessionBySlug.get(slug);
     if (!session) return;
 
-    broadcastQuestions(slug, session.id);
-    io.to(slug).emit('question-focused', stmts.getQuestion.get(questionId));
+    await broadcastQuestions(slug, session.id);
+    const focused = await stmts.getQuestion.get(questionId);
+    io.to(slug).emit('question-focused', focused);
   });
 
-  socket.on('unfocus-question', ({ slug, questionId }) => {
-    const question = stmts.getQuestion.get(questionId);
+  socket.on('unfocus-question', async ({ slug, questionId }) => {
+    const question = await stmts.getQuestion.get(questionId);
     if (!question) return;
 
-    stmts.setQuestionStatus.run('active', questionId);
+    await stmts.setQuestionStatus.run('active', questionId);
 
-    const session = stmts.getSessionBySlug.get(slug);
+    const session = await stmts.getSessionBySlug.get(slug);
     if (!session) return;
 
-    broadcastQuestions(slug, session.id);
+    await broadcastQuestions(slug, session.id);
     io.to(slug).emit('question-unfocused');
   });
 
-  socket.on('answer-question', ({ slug, questionId }) => {
-    const question = stmts.getQuestion.get(questionId);
+  socket.on('answer-question', async ({ slug, questionId }) => {
+    const question = await stmts.getQuestion.get(questionId);
     if (!question) return;
 
-    stmts.setQuestionStatus.run('answered', questionId);
+    await stmts.setQuestionStatus.run('answered', questionId);
 
-    const session = stmts.getSessionBySlug.get(slug);
+    const session = await stmts.getSessionBySlug.get(slug);
     if (!session) return;
 
-    broadcastQuestions(slug, session.id);
+    await broadcastQuestions(slug, session.id);
     io.to(slug).emit('question-unfocused');
   });
 
-  socket.on('hide-question', ({ slug, questionId }) => {
-    const question = stmts.getQuestion.get(questionId);
+  socket.on('hide-question', async ({ slug, questionId }) => {
+    const question = await stmts.getQuestion.get(questionId);
     if (!question) return;
 
-    stmts.setQuestionStatus.run('hidden', questionId);
+    await stmts.setQuestionStatus.run('hidden', questionId);
 
-    const session = stmts.getSessionBySlug.get(slug);
+    const session = await stmts.getSessionBySlug.get(slug);
     if (!session) return;
-    broadcastQuestions(slug, session.id);
+    await broadcastQuestions(slug, session.id);
   });
 
-  socket.on('edit-question', ({ slug, questionId, newText, visitorId }) => {
-    const question = stmts.getQuestion.get(questionId);
+  socket.on('edit-question', async ({ slug, questionId, newText, visitorId }) => {
+    const question = await stmts.getQuestion.get(questionId);
     if (!question) return;
 
-    // Only the author can edit their own question
     if (!visitorId || question.visitor_id !== visitorId) {
       socket.emit('error-message', 'Du kan bare redigere dine egne spørsmål.');
       return;
@@ -237,44 +247,59 @@ io.on('connection', (socket) => {
       return;
     }
 
-    stmts.updateQuestionText.run(newText.trim(), questionId);
-    stmts.resetVotes.run(questionId);
-    stmts.deleteVotesForQuestion.run(questionId);
+    await stmts.updateQuestionText.run(newText.trim(), questionId);
+    await stmts.resetVotes.run(questionId);
+    await stmts.deleteVotesForQuestion.run(questionId);
 
-    const session = stmts.getSessionBySlug.get(slug);
+    const session = await stmts.getSessionBySlug.get(slug);
     if (!session) return;
-    broadcastQuestions(slug, session.id);
+    await broadcastQuestions(slug, session.id);
   });
 
-  socket.on('delete-own-question', ({ slug, questionId, visitorId }) => {
-    const question = stmts.getQuestion.get(questionId);
+  socket.on('delete-own-question', async ({ slug, questionId, visitorId }) => {
+    const question = await stmts.getQuestion.get(questionId);
     if (!question) return;
 
-    // Only the author can delete their own question
     if (!visitorId || question.visitor_id !== visitorId) {
       socket.emit('error-message', 'Du kan bare slette dine egne spørsmål.');
       return;
     }
 
-    stmts.deleteVotesForQuestion.run(questionId);
-    stmts.deleteQuestion.run(questionId);
+    await stmts.deleteVotesForQuestion.run(questionId);
+    await stmts.deleteQuestion.run(questionId);
 
-    const session = stmts.getSessionBySlug.get(slug);
+    const session = await stmts.getSessionBySlug.get(slug);
     if (!session) return;
-    broadcastQuestions(slug, session.id);
+    await broadcastQuestions(slug, session.id);
   });
 
-  socket.on('delete-question', ({ slug, questionId }) => {
-    stmts.deleteVotesForQuestion.run(questionId);
-    stmts.deleteQuestion.run(questionId);
+  socket.on('delete-question', async ({ slug, questionId }) => {
+    await stmts.deleteVotesForQuestion.run(questionId);
+    await stmts.deleteQuestion.run(questionId);
 
-    const session = stmts.getSessionBySlug.get(slug);
+    const session = await stmts.getSessionBySlug.get(slug);
     if (!session) return;
-    broadcastQuestions(slug, session.id);
+    await broadcastQuestions(slug, session.id);
   });
 });
 
+// --- Startup ---
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`TKAI QA kjører på http://localhost:${PORT}`);
+
+async function main() {
+  await initDb();
+  console.log('Database initialized');
+
+  // Cleanup old sessions every hour
+  setInterval(cleanupOldSessions, 60 * 60 * 1000);
+  await cleanupOldSessions();
+
+  server.listen(PORT, () => {
+    console.log(`TKAI QA kjører på http://localhost:${PORT}`);
+  });
+}
+
+main().catch(err => {
+  console.error('Startup failed:', err);
+  process.exit(1);
 });

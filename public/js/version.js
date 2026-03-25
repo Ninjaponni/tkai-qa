@@ -1,4 +1,4 @@
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.6';
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.querySelector('.site-footer');
   if (!el) return;
