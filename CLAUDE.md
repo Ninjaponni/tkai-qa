@@ -61,6 +61,8 @@ try { await client.execute('ALTER TABLE questions ADD COLUMN visitor_id TEXT'); 
 
 **Session columns added in v1.8:** `admin_key` (32-char random, NULL for pre-1.8 sessions), `event_slug` (`^tkai-\d+$` or NULL), `is_live` + `live_at` (only one live per `event_slug`, set in one batch), `last_activity_at` (NULL = use `created_at`).
 
+**`tkai-0` is reserved for testing.** Use it for test sessions so they never end up in a real event's archive. It is filtered out of `/api/events` (`TEST_EVENT_SLUG` in `server.js`) and must also be excluded from the archive API (QA-V2 B1). Note: `/live` does *not* exclude it (so `/live` can be tested), so avoid leaving a `tkai-0` session newer than the real one on event night unless the real session is set live.
+
 **Cleanup:** sessions *without* `event_slug` (and their questions) auto-delete after 24 hours. Sessions *with* `event_slug` are archived forever.
 
 **Read-only archive:** a session with `event_slug` becomes read-only for the audience (no new questions, votes, edits or own deletes) 24 h after its last activity (new question, vote, or being set live), and never while it is live. So sessions can be created the day before an event. Speaker can still hide/delete. `GET /api/sessions/:slug` returns `read_only` and `live`.
@@ -97,7 +99,7 @@ Hosted on Render.com, **Free plan** (auto-deploys from GitHub `main` branch).
 
 **Cold start:** on Free the service spins down after ~15 min without traffic, and the first request then takes up to ~50 s. This is accepted (tested at events); no keep-alive. **Routine:** the organiser opens the speaker view before the doors open, so the service is awake when the audience scans the QR code.
 
-**Domains:** `qa.tkai.no` (custom domain, CNAME at Domeneshop), `www.ponnihub.no` (existing custom domain, must keep working) and the default `onrender.com` address all serve the same app. No Dockerfile — Render uses native Node.js buildpack. Bump `APP_VERSION` in `public/js/version.js` before each deploy. Uses global `fetch`, so Node 18+ is required.
+**Domains:** `qa.tkai.no` (custom domain, CNAME `qa` → `tkai-qa.onrender.com` at Domeneshop, TLS by Render, live since 25.09.2026), `www.ponnihub.no` (existing custom domain, must keep working) and the default `onrender.com` address all serve the same app. No Dockerfile — Render uses native Node.js buildpack. Bump `APP_VERSION` in `public/js/version.js` before each deploy. Uses global `fetch`, so Node 18+ is required.
 
 **Turso database:** `tkai-qa` under org `superponni` (aws-eu-west-1). Manage via `turso` CLI or Turso dashboard.
 

@@ -12,12 +12,12 @@ Q&A-appen blir en fast del av TKAI: én adresse (qa.tkai.no), ett QR-bilde som k
 
 ## Del A - før 14.10 (må)
 
-### A1. qa.tkai.no
+### A1. qa.tkai.no ✅ ferdig 25.09.2026
 - Legg til custom domain qa.tkai.no i Render. Tor Martin legger CNAME hos Domeneshop (DNS-pekere) til verdien Render oppgir. Gi ham nøyaktig verdi.
 - Gammel onrender.com-adresse skal fortsatt virke.
 - Sjekk Render-planen. Hvis tjenesten sover ved inaktivitet (free tier), dokumenter det i CLAUDE.md og foreslå enten oppgradering eller en keep-alive før arrangementer. Kaldstart på 50 sek. midt i en meetup er ikke akseptabelt.
 
-### A2. Adminnøkkel for speaker
+### A2. Adminnøkkel for speaker ✅ ferdig 25.09.2026
 - Ny kolonne `sessions.admin_key` (tilfeldig, minst 24 tegn, generert ved opprettelse).
 - Speaker-lenken blir `/s/:slug/speaker?k=<admin_key>`. Landingssiden redirecter dit som i dag. Nøkkelen lagres i localStorage for sesjonen slik at reload virker.
 - Alle speaker-events (focus, unfocus, answer, hide, delete-question) krever gyldig nøkkel server-side. Uten nøkkel: avvis stille med `error-message`.
@@ -25,28 +25,37 @@ Q&A-appen blir en fast del av TKAI: én adresse (qa.tkai.no), ett QR-bilde som k
 - `GET /api/sessions/:slug` skal aldri returnere `admin_key`.
 - Eksisterende sesjoner uten nøkkel: tillat som før (de slettes uansett innen 24 t). Ingen gammel data skal brekke.
 
-### A3. Kobling til arrangement og arkiv
+### A3. Kobling til arrangement og arkiv ✅ ferdig 25.09.2026
 - Ny kolonne `sessions.event_slug` (f.eks. `tkai-7`, valideres mot `^tkai-\d+$`, nullable).
 - Landingssiden får et valgfritt felt "TKAI-arrangement". Enkleste versjon: nedtrekksliste fra `https://tkai.no/events.json` (se del B1), med fallback til fritekst hvis filen ikke finnes ennå.
 - Oppryddingen endres: sesjoner MED `event_slug` slettes aldri. Sesjoner uten slettes etter 24 t som før. Beslutning: vi arkiverer bare TKAI-sesjoner, ikke det andre lager.
 - Når en arkivert sesjon er eldre enn 24 t, blir den skrivebeskyttet: publikum kan lese, men ikke stille nye spørsmål eller stemme. Speaker kan fortsatt skjule/slette.
 
-### A4. Fast QR: qa.tkai.no/live
+### A4. Fast QR: qa.tkai.no/live ✅ ferdig 25.09.2026
 - `GET /live` redirecter (302) til publikumssiden for nyeste sesjon med `event_slug` opprettet siste 12 t. Finnes ingen: vis en enkel side "Ingen Q&A akkurat nå. Følg med på tkai.no".
 - Da kan én statisk QR-kode til `https://qa.tkai.no/live` ligge fast i After Effects-filmen og på rollup, uten å lages på nytt hver gang.
 - Lag QR-koden som SVG og PNG (min. 2000 px) i `public/qr-live.svg/.png` så Tor Martin kan hente den til grafikken.
 
 ### Ferdig når (del A)
-- qa.tkai.no virker med HTTPS.
-- Speaker-lenke uten `k` kan ikke fokusere/skjule/slette (test med to nettlesere).
-- En test-sesjon koblet til `tkai-7` finnes fortsatt etter manuell kjøring av oppryddingen, en uten kobling er borte.
-- `/live` sender til riktig sesjon.
-- `APP_VERSION` bumpet, CLAUDE.md oppdatert (auth-modell, opprydding, nye kolonner, /live).
+- [x] qa.tkai.no virker med HTTPS.
+- [x] Speaker-lenke uten `k` kan ikke fokusere/skjule/slette (test med to nettlesere).
+- [x] En test-sesjon koblet til `tkai-7` finnes fortsatt etter manuell kjøring av oppryddingen, en uten kobling er borte.
+- [x] `/live` sender til riktig sesjon.
+- [x] `APP_VERSION` bumpet, CLAUDE.md oppdatert (auth-modell, opprydding, nye kolonner, /live).
+
+### Status del A (25.09.2026)
+Ute i drift som v1.8. Endringer utover bestillingen, avtalt underveis:
+- "Sett som live"-knapp (`is_live`/`live_at`). `/live` går til sesjonen som er satt live, med nyeste TKAI-sesjon siste 12 t som fallback.
+- Nøkkelen fjernes fra adressefeltet, og det er en egen "Kopier speaker-lenke"-knapp.
+- Skrivebeskyttelse regnes fra siste aktivitet (spørsmål, stemme, satt live), aldri mens sesjonen er live.
+- Rå `visitor_id` sendes ikke lenger til klientene (erstattet av `owner`-hash).
+- Render Free, ingen keep-alive. Arrangør åpner speaker-visningen før dørene åpner.
+- `tkai-0` er reservert for testing.
 
 ## Del B - etter 14.10 (bør)
 
 ### B1. Arkiv-API for tkai.no
-- `GET /api/events/:eventSlug/questions`: alle sesjoner for arrangementet, med tittel, foredragsholder og spørsmål (tekst, upvotes, status answered/active). Aldri `visitor_id`, `admin_key` eller skjulte spørsmål. Nicknames kan tas med (de er genererte).
+- `GET /api/events/:eventSlug/questions`: alle sesjoner for arrangementet (aldri for `tkai-0`, som er reservert for testing), med tittel, foredragsholder og spørsmål (tekst, upvotes, status answered/active). Aldri `visitor_id`, `admin_key` eller skjulte spørsmål. Nicknames kan tas med (de er genererte).
 - CORS eller bare offentlig GET, siden tkai.no leser den ved build.
 - Egen, liten oppgave i tkai-web (ikke her): skriv `/events.json` ved build (number, slug, tittel, dato for kommende og nylige arrangementer), og vis spørsmål fra API-et på arrangementssiden når "Vis Q&A på nett" er huket av i Notion. Notion er fortsatt fasiten for hva som publiseres. Dagens manuelle spørsmål i Notion for #4 og #6 skal fortsatt virke.
 

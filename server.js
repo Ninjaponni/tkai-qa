@@ -45,6 +45,8 @@ function keyMatches(session, key) {
 
 // --- Arkiverte TKAI-sesjoner ---
 const EVENT_SLUG_RE = /^tkai-\d+$/;
+// tkai-0 er reservert for testing: kan brukes på sesjoner, men vises aldri i /api/events (eller arkiv-API-et i B1)
+const TEST_EVENT_SLUG = 'tkai-0';
 const ARCHIVE_READ_ONLY_MS = 24 * 60 * 60 * 1000;
 
 // Tidsstempler i databasen er UTC på formen 'YYYY-MM-DD HH:MM:SS'
@@ -193,7 +195,7 @@ app.get('/api/sessions/:slug', async (req, res) => {
 
 // Kommende/nylige TKAI-arrangementer til nedtrekkslisten på landingssiden.
 // Hentes fra tkai.no på serveren (unngår CORS) og mellomlagres i 10 min. Tom liste ved feil.
-const EVENTS_URL = 'https://tkai.no/events.json';
+const EVENTS_URL = process.env.EVENTS_URL || 'https://tkai.no/events.json';
 let eventsCache = { at: 0, data: [] };
 
 app.get('/api/events', async (req, res) => {
@@ -207,7 +209,7 @@ app.get('/api/events', async (req, res) => {
       const json = await r.json();
       const list = Array.isArray(json) ? json : (json && json.events) || [];
       data = list
-        .filter(e => e && typeof e.slug === 'string' && EVENT_SLUG_RE.test(e.slug))
+        .filter(e => e && typeof e.slug === 'string' && EVENT_SLUG_RE.test(e.slug) && e.slug !== TEST_EVENT_SLUG)
         .map(e => ({ slug: e.slug, number: e.number ?? null, title: e.title ?? null, date: e.date ?? null }));
     }
   } catch (err) {
