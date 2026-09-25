@@ -59,15 +59,17 @@ Turso hosted SQLite via `@libsql/client`. Four tables: `sessions`, `questions`, 
 try { await client.execute('ALTER TABLE questions ADD COLUMN visitor_id TEXT'); } catch (e) {}
 ```
 
-**Session columns added in v1.8:** `admin_key` (32-char random, NULL for pre-1.8 sessions), `event_slug` (`^tkai-\d+$` or NULL), `is_live` + `live_at` (only one live per `event_slug`, set in one batch).
+**Session columns added in v1.8:** `admin_key` (32-char random, NULL for pre-1.8 sessions), `event_slug` (`^tkai-\d+$` or NULL), `is_live` + `live_at` (only one live per `event_slug`, set in one batch), `last_activity_at` (NULL = use `created_at`).
 
 **Cleanup:** sessions *without* `event_slug` (and their questions) auto-delete after 24 hours. Sessions *with* `event_slug` are archived forever.
 
-**Read-only archive:** a session with `event_slug` older than 24 h is read-only for the audience (no new questions, votes, edits or own deletes). Speaker can still hide/delete. `GET /api/sessions/:slug` returns `read_only` and `live`.
+**Read-only archive:** a session with `event_slug` becomes read-only for the audience (no new questions, votes, edits or own deletes) 24 h after its last activity (new question, vote, or being set live), and never while it is live. So sessions can be created the day before an event. Speaker can still hide/delete. `GET /api/sessions/:slug` returns `read_only` and `live`.
 
 ## Authorization Model
 
-No login. Browser generates `visitor_id` (stored in localStorage), sent with socket events. Questions store `visitor_id` for ownership — edit/delete checks compare against it server-side.
+No login. Browser generates `visitor_id` (stored in localStorage), sent with socket events. Questions store `visitor_id` for ownership — edit/delete checks compare against the raw id server-side.
+
+**Raw `visitor_id` is never sent to clients.** `publicQuestion()` replaces it with `owner` (first 16 hex chars of sha256(visitor_id)) in every payload (`questions-updated`, `question-focused`). The audience joins with `{ slug, visitorId }` and the server replies `owner-hash`; the client treats questions with matching `owner` as its own. Hashing is server-side because `crypto.subtle` is unavailable on plain HTTP.
 
 **Speaker admin key:** `POST /api/sessions` generates `admin_key` and returns it to the creator only. `GET /api/sessions/:slug` never returns it (`publicSession()`). The landing page redirects to `/s/:slug/speaker?k=<key>`; `speaker.js` stores the key in localStorage (`tkai-admin-<slug>`) and strips `k` from the URL with `history.replaceState` (the speaker view is often projected). "Kopier speaker-lenke" gives the link with key.
 
@@ -91,7 +93,11 @@ Dark theme with Space Grotesk font. Key variables in `:root`:
 
 ## Deployment
 
-Hosted on Render.com (auto-deploys from GitHub `main` branch). No Dockerfile — Render uses native Node.js buildpack. Bump `APP_VERSION` in `public/js/version.js` before each deploy. Uses global `fetch`, so Node 18+ is required.
+Hosted on Render.com, **Free plan** (auto-deploys from GitHub `main` branch).
+
+**Cold start:** on Free the service spins down after ~15 min without traffic, and the first request then takes up to ~50 s. This is accepted (tested at events); no keep-alive. **Routine:** the organiser opens the speaker view before the doors open, so the service is awake when the audience scans the QR code.
+
+**Domains:** `qa.tkai.no` (custom domain, CNAME at Domeneshop), `www.ponnihub.no` (existing custom domain, must keep working) and the default `onrender.com` address all serve the same app. No Dockerfile — Render uses native Node.js buildpack. Bump `APP_VERSION` in `public/js/version.js` before each deploy. Uses global `fetch`, so Node 18+ is required.
 
 **Turso database:** `tkai-qa` under org `superponni` (aws-eu-west-1). Manage via `turso` CLI or Turso dashboard.
 

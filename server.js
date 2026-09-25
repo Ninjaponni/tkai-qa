@@ -47,21 +47,24 @@ function keyMatches(session, key) {
 const EVENT_SLUG_RE = /^tkai-\d+$/;
 const ARCHIVE_READ_ONLY_MS = 24 * 60 * 60 * 1000;
 
-// created_at er UTC på formen 'YYYY-MM-DD HH:MM:SS'
-function sessionAgeMs(session) {
-  return Date.now() - new Date(session.created_at.replace(' ', 'T') + 'Z').getTime();
+// Tidsstempler i databasen er UTC på formen 'YYYY-MM-DD HH:MM:SS'
+function msSince(sqlTime) {
+  return Date.now() - new Date(sqlTime.replace(' ', 'T') + 'Z').getTime();
 }
 
-// Arkiverte sesjoner eldre enn 24 t: publikum kan lese, men ikke skrive eller stemme
+// Arkiverte sesjoner uten aktivitet (nytt spørsmål, stemme, satt live) siste 24 t:
+// publikum kan lese, men ikke skrive eller stemme. Aldri mens sesjonen er live.
+// Da kan sesjonene lages dagen før arrangementet.
 function isReadOnly(session) {
-  return Boolean(session.event_slug) && sessionAgeMs(session) > ARCHIVE_READ_ONLY_MS;
+  if (!session.event_slug || isLiveNow(session)) return false;
+  return msSince(session.last_activity_at || session.created_at) > ARCHIVE_READ_ONLY_MS;
 }
 
 // Live-markeringen gjelder i 12 t, slik at en glemt markering ikke overstyrer neste arrangement
 const LIVE_MS = 12 * 60 * 60 * 1000;
 function isLiveNow(session) {
   if (!session.is_live || !session.live_at) return false;
-  return Date.now() - new Date(session.live_at.replace(' ', 'T') + 'Z').getTime() < LIVE_MS;
+  return msSince(session.live_at) < LIVE_MS;
 }
 
 function rejectIfReadOnly(socket, session) {
@@ -76,6 +79,17 @@ function publicSession(session) {
   return { ...rest, read_only: isReadOnly(session), live: isLiveNow(session) };
 }
 
+// --- Eierskap uten å lekke visitor_id ---
+// Klientene får bare en kortet sha256 av visitor_id (owner). Serveren sjekker fortsatt mot rå id.
+function ownerHash(visitorId) {
+  return crypto.createHash('sha256').update(String(visitorId)).digest('hex').slice(0, 16);
+}
+
+function publicQuestion(q) {
+  const { visitor_id, ...rest } = q;
+  return { ...rest, owner: visitor_id ? ownerHash(visitor_id) : null };
+}
+
 // Speakere med gyldig nøkkel ligger i et eget rom og får også skjulte spørsmål
 function speakerRoom(slug) {
   return `${slug}:speaker`;
@@ -83,7 +97,7 @@ function speakerRoom(slug) {
 
 // --- Helper: broadcast updated questions ---
 async function broadcastQuestions(slug, sessionId) {
-  const allQuestions = await stmts.getAllQuestions.all(sessionId);
+  const allQuestions = (await stmts.getAllQuestions.all(sessionId)).map(publicQuestion);
   const questions = allQuestions.filter(q => q.status !== 'hidden');
   io.to(slug).except(speakerRoom(slug)).emit('questions-updated', { questions });
   io.to(speakerRoom(slug)).emit('questions-updated', { questions, allQuestions });
@@ -247,12 +261,16 @@ app.get('/s/:slug/speaker', (req, res) => {
 // --- Socket.io ---
 
 io.on('connection', (socket) => {
-  // Publikum sender slug som streng, speaker sender { slug, key, role: 'speaker' }
+  // Publikum sender { slug, visitorId }, speaker sender { slug, key, role: 'speaker' }
   socket.on('join-session', async (payload) => {
     try {
-      const { slug, key, role } = typeof payload === 'string' ? { slug: payload } : (payload || {});
+      const { slug, key, role, visitorId } = typeof payload === 'string' ? { slug: payload } : (payload || {});
       if (typeof slug !== 'string') return;
       socket.join(slug);
+      // Klienten kjenner igjen egne spørsmål på owner-hashen
+      if (typeof visitorId === 'string' && visitorId) {
+        socket.emit('owner-hash', ownerHash(visitorId));
+      }
       const session = await stmts.getSessionBySlug.get(slug);
       if (!session) return;
 
@@ -263,7 +281,7 @@ io.on('connection', (socket) => {
         socket.emit('speaker-denied');
       }
 
-      const allQuestions = await stmts.getAllQuestions.all(session.id);
+      const allQuestions = (await stmts.getAllQuestions.all(session.id)).map(publicQuestion);
       const questions = allQuestions.filter(q => q.status !== 'hidden');
       socket.emit('questions-updated', isSpeaker ? { questions, allQuestions } : { questions });
     } catch (err) {
@@ -294,6 +312,7 @@ io.on('connection', (socket) => {
 
       const nick = nickname || generateNickname();
       await stmts.createQuestion.run(session.id, text.trim(), nick, visitorId || null);
+      await stmts.touchActivity.run(session.id);
 
       await broadcastQuestions(slug, session.id);
       socket.emit('nickname-assigned', nick);
@@ -317,6 +336,7 @@ io.on('connection', (socket) => {
 
       await stmts.addVote.run(questionId, visitorId);
       await stmts.upvoteQuestion.run(questionId);
+      await stmts.touchActivity.run(ctx.session.id);
 
       await broadcastQuestions(slug, ctx.session.id);
     } catch (err) {
@@ -334,7 +354,7 @@ io.on('connection', (socket) => {
 
       await broadcastQuestions(slug, ctx.session.id);
       const focused = await stmts.getQuestion.get(questionId);
-      io.to(slug).emit('question-focused', focused);
+      io.to(slug).emit('question-focused', publicQuestion(focused));
     } catch (err) {
       console.error('Error in focus-question:', err);
     }

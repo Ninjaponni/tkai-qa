@@ -96,8 +96,12 @@ const stmts = {
   // Bare én live-sesjon per arrangement: nullstill de andre og sett denne i samme transaksjon
   setLive: { run: async (sessionId, eventSlug) => client.batch([
     { sql: 'UPDATE sessions SET is_live = 0 WHERE event_slug = ? AND id != ?', args: [eventSlug, sessionId] },
-    { sql: `UPDATE sessions SET is_live = 1, live_at = datetime('now') WHERE id = ?`, args: [sessionId] },
+    { sql: `UPDATE sessions SET is_live = 1, live_at = datetime('now'), last_activity_at = datetime('now') WHERE id = ?`, args: [sessionId] },
   ], 'write') },
+  // Siste aktivitet (nytt spørsmål, stemme, satt live) styrer når et arkiv blir skrivebeskyttet
+  touchActivity: { run: makeRun(
+    `UPDATE sessions SET last_activity_at = datetime('now') WHERE id = ?`
+  )},
   unsetLive: { run: makeRun(
     'UPDATE sessions SET is_live = 0 WHERE id = ?'
   )},
@@ -183,6 +187,13 @@ async function initDb() {
   }
   try {
     await client.execute('ALTER TABLE sessions ADD COLUMN live_at TEXT');
+  } catch (e) {
+    // Kolonnen finnes allerede
+  }
+
+  // Migrasjon: siste aktivitet (NULL = bruk created_at)
+  try {
+    await client.execute('ALTER TABLE sessions ADD COLUMN last_activity_at TEXT');
   } catch (e) {
     // Kolonnen finnes allerede
   }

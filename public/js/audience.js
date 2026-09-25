@@ -14,6 +14,9 @@ if (!visitorId) {
   localStorage.setItem('tkai-visitor-id', visitorId);
 }
 
+// Serveren sender en hash av visitorId (owner-hash). Spørsmål med samme owner er mine.
+let myOwner = null;
+
 // Nickname (per session)
 let nickname = localStorage.getItem(`tkai-nick-${slug}`);
 const votedQuestions = JSON.parse(localStorage.getItem(`tkai-votes-${slug}`) || '[]');
@@ -122,7 +125,7 @@ function renderQuestions(questions) {
   let hintShownThisRender = false;
 
   activeQuestions.forEach(q => {
-    const isOwn = q.visitor_id && q.visitor_id === visitorId;
+    const isOwn = Boolean(q.owner) && q.owner === myOwner;
     const isNew = !knownQuestionIds.has(q.id);
     const statusClass = q.status === 'focused' ? 'question-focused' : q.status === 'answered' ? 'question-answered' : '';
     const hasVoted = votedQuestions.includes(q.id);
@@ -347,7 +350,12 @@ function initSwipeHandlers() {
 
 // Socket events
 socket.on('connect', () => {
-  socket.emit('join-session', slug);
+  socket.emit('join-session', { slug, visitorId });
+});
+
+socket.on('owner-hash', (hash) => {
+  myOwner = hash;
+  renderQuestions(lastQuestions);
 });
 
 socket.on('questions-updated', ({ questions }) => {
