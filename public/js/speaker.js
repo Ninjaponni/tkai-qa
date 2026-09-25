@@ -194,8 +194,11 @@ function renderQuestions() {
         <p class="question-text">${escapeHtml(q.text)}</p>
         <p class="question-meta">
           <span class="question-nickname">${escapeHtml(q.nickname)}</span>
+          <span class="meta-sep" aria-hidden="true">·</span>
           <span class="upvote-count-inline">&#9650; ${q.upvotes}</span>
+          <span class="meta-sep" aria-hidden="true">·</span>
           <span class="question-time">${timeAgo(q.created_at)}</span>
+          <span class="meta-sep" aria-hidden="true">·</span>
           <span class="status-badge status-${q.status}">${statusLabel(q.status)}</span>
         </p>
       </div>

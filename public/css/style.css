@@ -1042,3 +1042,49 @@ textarea {
 .speaker-no-key .focus-actions {
   display: none;
 }
+
+/* === Speaker-kort på mobil (< 640 px) ===
+   Tekst og meta i full bredde, knappene på egen rad under med like brede kolonner.
+   Desktop og projektor (>= 640 px) er uendret. */
+.meta-sep {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .speaker-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .speaker-card .question-text {
+    word-break: normal;
+    overflow-wrap: anywhere; /* bryter bare ord som er lengre enn hele linja, f.eks. lenker */
+  }
+
+  .speaker-card .question-meta {
+    gap: 6px;
+  }
+
+  .speaker-card .question-meta > span {
+    white-space: nowrap;
+  }
+
+  .speaker-card .meta-sep {
+    display: inline;
+    color: var(--text-muted);
+  }
+
+  .speaker-card .question-actions {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .speaker-card .btn-action {
+    min-height: 44px;
+    padding: 8px 4px;
+    font-size: 0.85rem;
+  }
+}
