@@ -83,7 +83,8 @@ if (!ORGANIZER_KEY) {
   console.warn('TKAI_ORGANIZER_KEY er ikke satt: ingen kan koble sesjoner til arrangement eller sette live.');
 }
 
-// Enkel sperre mot gjetting: maks 10 feil forsøk per IP per 15 min
+// Sperre mot gjetting: etter 10 feil forsøk per IP per 15 min avvises feil kode uten å sjekkes.
+// Riktig kode slippes alltid gjennom (hele salen kan dele én IP, arrangørene skal aldri stenges ute).
 const ORGANIZER_MAX_FAILS = 10;
 const ORGANIZER_WINDOW_MS = 15 * 60 * 1000;
 const organizerFails = new Map();
@@ -94,26 +95,36 @@ function clientIp(headers, fallback) {
   return (typeof fwd === 'string' && fwd.split(',')[0].trim()) || fallback || 'ukjent';
 }
 
+// Koden er en passfrase (fire ord med bindestrek): trim, små bokstaver, NFC (æøå skrevet likt på alle enheter)
+function normalizeCode(code) {
+  return code.normalize('NFC').trim().toLowerCase();
+}
+
 function organizerKeyMatches(code) {
-  if (!ORGANIZER_KEY || typeof code !== 'string' || !code) return false;
-  // Sammenlign hasher, så lengden på koden ikke lekker
-  const a = crypto.createHash('sha256').update(ORGANIZER_KEY).digest();
-  const b = crypto.createHash('sha256').update(code).digest();
+  if (!ORGANIZER_KEY || typeof code !== 'string' || !normalizeCode(code)) return false;
+  // Hash begge sider, så lengdene alltid er like og lengden på koden ikke lekker
+  const a = crypto.createHash('sha256').update(normalizeCode(ORGANIZER_KEY)).digest();
+  const b = crypto.createHash('sha256').update(normalizeCode(code)).digest();
   return crypto.timingSafeEqual(a, b);
 }
 
-// Sjekker koden og teller feil forsøk. Sperret IP avvises selv med riktig kode.
+// Riktig kode først, alltid. Feil kode telles; når IP-en er sperret avvises den uten å telles videre.
 function checkOrganizer(ip, code) {
+  if (organizerKeyMatches(code)) return true;
+  if (typeof code !== 'string' || !code.trim()) return false;
+
   const now = Date.now();
   let entry = organizerFails.get(ip);
-  if (entry && now > entry.resetAt) {
-    organizerFails.delete(ip);
-    entry = null;
+  if (!entry || now > entry.resetAt) {
+    entry = { count: 0, resetAt: now + ORGANIZER_WINDOW_MS };
+    organizerFails.set(ip, entry);
   }
-  if (entry && entry.count >= ORGANIZER_MAX_FAILS) return false;
-  if (organizerKeyMatches(code)) return true;
-  if (code) {
-    organizerFails.set(ip, { count: (entry ? entry.count : 0) + 1, resetAt: entry ? entry.resetAt : now + ORGANIZER_WINDOW_MS });
+  if (entry.count < ORGANIZER_MAX_FAILS) {
+    entry.count++;
+    // Logg én gang når sperren slår inn, så gjetteforsøk synes i Render-loggen
+    if (entry.count === ORGANIZER_MAX_FAILS) {
+      console.warn(`Arrangørkode: ${ORGANIZER_MAX_FAILS} feil forsøk fra ${ip} siste 15 min, feil kode avvises uten sjekk`);
+    }
   }
   return false;
 }
