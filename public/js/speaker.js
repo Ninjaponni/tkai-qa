@@ -5,6 +5,17 @@ const pathParts = window.location.pathname.split('/');
 const slugIndex = pathParts.indexOf('s') + 1;
 const slug = pathParts[slugIndex];
 
+// Adminnøkkel: les fra ?k=, lagre i localStorage og fjern den fra adressefeltet
+// (speaker-visningen vises ofte på projektor)
+const keyStorage = `tkai-admin-${slug}`;
+const urlKey = new URLSearchParams(window.location.search).get('k');
+if (urlKey) {
+  try { localStorage.setItem(keyStorage, urlKey); } catch (e) {}
+  history.replaceState(null, '', window.location.pathname);
+}
+let adminKey = urlKey;
+try { adminKey = adminKey || localStorage.getItem(keyStorage); } catch (e) {}
+
 let allQuestions = [];
 let currentFilter = 'all';
 let audienceUrl = '';
@@ -184,26 +195,31 @@ function renderQuestions() {
   });
 }
 
+// Alle speaker-handlinger sender med adminnøkkelen
+function emitSpeaker(event, questionId) {
+  socket.emit(event, { slug, key: adminKey, questionId });
+}
+
 function handleAction(action, questionId) {
   switch (action) {
     case 'focus':
-      socket.emit('focus-question', { slug, questionId });
+      emitSpeaker('focus-question', questionId);
       break;
     case 'unfocus':
-      socket.emit('unfocus-question', { slug, questionId });
+      emitSpeaker('unfocus-question', questionId);
       break;
     case 'answer':
-      socket.emit('answer-question', { slug, questionId });
+      emitSpeaker('answer-question', questionId);
       break;
     case 'hide':
-      socket.emit('hide-question', { slug, questionId });
+      emitSpeaker('hide-question', questionId);
       break;
     case 'restore':
-      socket.emit('unfocus-question', { slug, questionId });
+      emitSpeaker('unfocus-question', questionId);
       break;
     case 'delete':
       if (confirm('Er du sikker på at du vil slette dette spørsmålet permanent?')) {
-        socket.emit('delete-question', { slug, questionId });
+        emitSpeaker('delete-question', questionId);
       }
       break;
   }
@@ -212,23 +228,39 @@ function handleAction(action, questionId) {
 // Focus overlay buttons
 unfocusBtn.addEventListener('click', () => {
   if (focusedQuestionId) {
-    socket.emit('unfocus-question', { slug, questionId: focusedQuestionId });
+    emitSpeaker('unfocus-question', focusedQuestionId);
   }
 });
 
 answerBtn.addEventListener('click', () => {
   if (focusedQuestionId) {
-    socket.emit('answer-question', { slug, questionId: focusedQuestionId });
+    emitSpeaker('answer-question', focusedQuestionId);
   }
 });
 
 // Socket events
 socket.on('connect', () => {
-  socket.emit('join-session', slug);
+  socket.emit('join-session', { slug, key: adminKey, role: 'speaker' });
 });
 
+// Uten gyldig nøkkel får siden bare se det publikum ser
+socket.on('speaker-denied', () => {
+  showSpeakerWarning('Denne lenken mangler gyldig adminnøkkel. Du kan se spørsmålene, men ikke styre dem. Be den som opprettet sesjonen om speaker-lenken.');
+  document.getElementById('copy-speaker-btn').style.display = 'none';
+});
+
+socket.on('error-message', (msg) => {
+  showSpeakerWarning(msg);
+});
+
+function showSpeakerWarning(msg) {
+  const el = document.getElementById('speaker-warning');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
 socket.on('questions-updated', (data) => {
-  allQuestions = data.allQuestions;
+  allQuestions = data.allQuestions || data.questions;
   renderQuestions();
   updateTabBadge();
 });
@@ -292,13 +324,24 @@ function statusLabel(status) {
   }
 }
 
-// Kopier publikumslenke til clipboard (fallback hvis QR ikke fungerer)
+// Kopier lenke til clipboard og vis "Kopiert!" en kort stund
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text);
+  const label = btn.textContent;
+  btn.textContent = 'Kopiert!';
+  setTimeout(() => btn.textContent = label, 2000);
+}
+
+// Kopier publikumslenke (fallback hvis QR ikke fungerer)
 function copyAudienceLink() {
   if (!audienceUrl) return;
-  navigator.clipboard.writeText(audienceUrl);
-  const btn = document.getElementById('copy-link-btn');
-  btn.textContent = 'Kopiert!';
-  setTimeout(() => btn.textContent = 'Kopier lenke', 2000);
+  copyToClipboard(audienceUrl, document.getElementById('copy-link-btn'));
+}
+
+// Kopier speaker-lenke med nøkkel, for å sende til foredragsholderen
+function copySpeakerLink() {
+  const url = `${window.location.origin}/s/${slug}/speaker` + (adminKey ? `?k=${encodeURIComponent(adminKey)}` : '');
+  copyToClipboard(url, document.getElementById('copy-speaker-btn'));
 }
 
 // Init

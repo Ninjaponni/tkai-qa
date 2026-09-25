@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { initDb, stmts } = require('./db');
 const { generateNickname } = require('./nicknames');
@@ -28,11 +29,61 @@ async function cleanupOldSessions() {
   }
 }
 
+// --- Adminnøkkel for speaker ---
+function generateAdminKey() {
+  return crypto.randomBytes(24).toString('base64url'); // 32 tegn
+}
+
+// Gamle sesjoner uten nøkkel godtas som før
+function keyMatches(session, key) {
+  if (!session.admin_key) return true;
+  if (typeof key !== 'string') return false;
+  const a = Buffer.from(session.admin_key);
+  const b = Buffer.from(key);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// Sesjon slik den kan vises offentlig (uten admin_key)
+function publicSession(session) {
+  const { admin_key, ...rest } = session;
+  return rest;
+}
+
+// Speakere med gyldig nøkkel ligger i et eget rom og får også skjulte spørsmål
+function speakerRoom(slug) {
+  return `${slug}:speaker`;
+}
+
 // --- Helper: broadcast updated questions ---
 async function broadcastQuestions(slug, sessionId) {
   const allQuestions = await stmts.getAllQuestions.all(sessionId);
   const questions = allQuestions.filter(q => q.status !== 'hidden');
-  io.to(slug).emit('questions-updated', { questions, allQuestions });
+  io.to(slug).except(speakerRoom(slug)).emit('questions-updated', { questions });
+  io.to(speakerRoom(slug)).emit('questions-updated', { questions, allQuestions });
+}
+
+// Henter sesjon og (valgfritt) spørsmål, og sjekker at spørsmålet hører til sesjonen
+async function getSessionAndQuestion(slug, questionId) {
+  const session = await stmts.getSessionBySlug.get(slug);
+  if (!session) return null;
+  if (questionId === undefined) return { session };
+  const question = await stmts.getQuestion.get(questionId);
+  if (!question || question.session_id !== session.id) return null;
+  return { session, question };
+}
+
+// Som over, men krever gyldig adminnøkkel. Avviser stille med error-message.
+async function getSpeakerContext(socket, { slug, key, questionId }) {
+  const session = await stmts.getSessionBySlug.get(slug);
+  if (!session) return null;
+  if (!keyMatches(session, key)) {
+    socket.emit('error-message', 'Du har ikke tilgang til å styre denne sesjonen.');
+    return null;
+  }
+  if (questionId === undefined) return { session };
+  const question = await stmts.getQuestion.get(questionId);
+  if (!question || question.session_id !== session.id) return null;
+  return { session, question };
 }
 
 // --- REST API ---
@@ -62,8 +113,9 @@ app.post('/api/sessions', async (req, res) => {
       const suffix = uuidv4().slice(0, 6 + attempt);
       const slug = `${base}-${suffix}`;
       try {
-        await stmts.createSession.run(slug, title, speaker, speakerImage || null);
+        await stmts.createSession.run(slug, title, speaker, speakerImage || null, generateAdminKey());
         await stmts.incrementSessionCount.run();
+        // Bare den som oppretter sesjonen får nøkkelen
         const session = await stmts.getSessionBySlug.get(slug);
         return res.json(session);
       } catch (err) {
@@ -85,7 +137,7 @@ app.get('/api/sessions/:slug', async (req, res) => {
     if (!session) {
       return res.status(404).json({ error: 'Sesjon ikke funnet.' });
     }
-    res.json(session);
+    res.json(publicSession(session));
   } catch (err) {
     console.error('Error getting session:', err);
     res.status(500).json({ error: 'Serverfeil.' });
@@ -121,15 +173,25 @@ app.get('/s/:slug/speaker', (req, res) => {
 // --- Socket.io ---
 
 io.on('connection', (socket) => {
-  socket.on('join-session', async (slug) => {
+  // Publikum sender slug som streng, speaker sender { slug, key, role: 'speaker' }
+  socket.on('join-session', async (payload) => {
     try {
+      const { slug, key, role } = typeof payload === 'string' ? { slug: payload } : (payload || {});
+      if (typeof slug !== 'string') return;
       socket.join(slug);
       const session = await stmts.getSessionBySlug.get(slug);
-      if (session) {
-        const allQuestions = await stmts.getAllQuestions.all(session.id);
-        const questions = allQuestions.filter(q => q.status !== 'hidden');
-        socket.emit('questions-updated', { questions, allQuestions });
+      if (!session) return;
+
+      const isSpeaker = role === 'speaker' && keyMatches(session, key);
+      if (isSpeaker) {
+        socket.join(speakerRoom(slug));
+      } else if (role === 'speaker') {
+        socket.emit('speaker-denied');
       }
+
+      const allQuestions = await stmts.getAllQuestions.all(session.id);
+      const questions = allQuestions.filter(q => q.status !== 'hidden');
+      socket.emit('questions-updated', isSpeaker ? { questions, allQuestions } : { questions });
     } catch (err) {
       console.error('Error in join-session:', err);
     }
@@ -168,8 +230,8 @@ io.on('connection', (socket) => {
 
   socket.on('upvote', async ({ slug, questionId, visitorId }) => {
     try {
-      const question = await stmts.getQuestion.get(questionId);
-      if (!question) return;
+      const ctx = await getSessionAndQuestion(slug, questionId);
+      if (!ctx) return;
 
       const already = await stmts.hasVoted.get(questionId, visitorId);
       if (already) {
@@ -180,26 +242,21 @@ io.on('connection', (socket) => {
       await stmts.addVote.run(questionId, visitorId);
       await stmts.upvoteQuestion.run(questionId);
 
-      const session = await stmts.getSessionBySlug.get(slug);
-      if (!session) return;
-      await broadcastQuestions(slug, session.id);
+      await broadcastQuestions(slug, ctx.session.id);
     } catch (err) {
       console.error('Error in upvote:', err);
     }
   });
 
-  socket.on('focus-question', async ({ slug, questionId }) => {
+  socket.on('focus-question', async ({ slug, key, questionId }) => {
     try {
-      const question = await stmts.getQuestion.get(questionId);
-      if (!question) return;
+      const ctx = await getSpeakerContext(socket, { slug, key, questionId });
+      if (!ctx) return;
 
-      await stmts.unfocusAll.run(question.session_id);
+      await stmts.unfocusAll.run(ctx.session.id);
       await stmts.setQuestionStatus.run('focused', questionId);
 
-      const session = await stmts.getSessionBySlug.get(slug);
-      if (!session) return;
-
-      await broadcastQuestions(slug, session.id);
+      await broadcastQuestions(slug, ctx.session.id);
       const focused = await stmts.getQuestion.get(questionId);
       io.to(slug).emit('question-focused', focused);
     } catch (err) {
@@ -207,50 +264,42 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('unfocus-question', async ({ slug, questionId }) => {
+  socket.on('unfocus-question', async ({ slug, key, questionId }) => {
     try {
-      const question = await stmts.getQuestion.get(questionId);
-      if (!question) return;
+      const ctx = await getSpeakerContext(socket, { slug, key, questionId });
+      if (!ctx) return;
 
       await stmts.setQuestionStatus.run('active', questionId);
 
-      const session = await stmts.getSessionBySlug.get(slug);
-      if (!session) return;
-
-      await broadcastQuestions(slug, session.id);
+      await broadcastQuestions(slug, ctx.session.id);
       io.to(slug).emit('question-unfocused');
     } catch (err) {
       console.error('Error in unfocus-question:', err);
     }
   });
 
-  socket.on('answer-question', async ({ slug, questionId }) => {
+  socket.on('answer-question', async ({ slug, key, questionId }) => {
     try {
-      const question = await stmts.getQuestion.get(questionId);
-      if (!question) return;
+      const ctx = await getSpeakerContext(socket, { slug, key, questionId });
+      if (!ctx) return;
 
       await stmts.setQuestionStatus.run('answered', questionId);
 
-      const session = await stmts.getSessionBySlug.get(slug);
-      if (!session) return;
-
-      await broadcastQuestions(slug, session.id);
+      await broadcastQuestions(slug, ctx.session.id);
       io.to(slug).emit('question-unfocused');
     } catch (err) {
       console.error('Error in answer-question:', err);
     }
   });
 
-  socket.on('hide-question', async ({ slug, questionId }) => {
+  socket.on('hide-question', async ({ slug, key, questionId }) => {
     try {
-      const question = await stmts.getQuestion.get(questionId);
-      if (!question) return;
+      const ctx = await getSpeakerContext(socket, { slug, key, questionId });
+      if (!ctx) return;
 
       await stmts.setQuestionStatus.run('hidden', questionId);
 
-      const session = await stmts.getSessionBySlug.get(slug);
-      if (!session) return;
-      await broadcastQuestions(slug, session.id);
+      await broadcastQuestions(slug, ctx.session.id);
     } catch (err) {
       console.error('Error in hide-question:', err);
     }
@@ -258,8 +307,9 @@ io.on('connection', (socket) => {
 
   socket.on('edit-question', async ({ slug, questionId, newText, visitorId }) => {
     try {
-      const question = await stmts.getQuestion.get(questionId);
-      if (!question) return;
+      const ctx = await getSessionAndQuestion(slug, questionId);
+      if (!ctx) return;
+      const { question } = ctx;
 
       if (!visitorId || question.visitor_id !== visitorId) {
         socket.emit('error-message', 'Du kan bare redigere dine egne spørsmål.');
@@ -285,9 +335,7 @@ io.on('connection', (socket) => {
       await stmts.resetVotes.run(questionId);
       await stmts.deleteVotesForQuestion.run(questionId);
 
-      const session = await stmts.getSessionBySlug.get(slug);
-      if (!session) return;
-      await broadcastQuestions(slug, session.id);
+      await broadcastQuestions(slug, ctx.session.id);
     } catch (err) {
       console.error('Error in edit-question:', err);
       socket.emit('error-message', 'Noe gikk galt. Prøv igjen.');
@@ -296,10 +344,10 @@ io.on('connection', (socket) => {
 
   socket.on('delete-own-question', async ({ slug, questionId, visitorId }) => {
     try {
-      const question = await stmts.getQuestion.get(questionId);
-      if (!question) return;
+      const ctx = await getSessionAndQuestion(slug, questionId);
+      if (!ctx) return;
 
-      if (!visitorId || question.visitor_id !== visitorId) {
+      if (!visitorId || ctx.question.visitor_id !== visitorId) {
         socket.emit('error-message', 'Du kan bare slette dine egne spørsmål.');
         return;
       }
@@ -307,27 +355,31 @@ io.on('connection', (socket) => {
       await stmts.deleteVotesForQuestion.run(questionId);
       await stmts.deleteQuestion.run(questionId);
 
-      const session = await stmts.getSessionBySlug.get(slug);
-      if (!session) return;
-      await broadcastQuestions(slug, session.id);
+      await broadcastQuestions(slug, ctx.session.id);
     } catch (err) {
       console.error('Error in delete-own-question:', err);
       socket.emit('error-message', 'Noe gikk galt. Prøv igjen.');
     }
   });
 
-  socket.on('delete-question', async ({ slug, questionId }) => {
+  socket.on('delete-question', async ({ slug, key, questionId }) => {
     try {
+      const ctx = await getSpeakerContext(socket, { slug, key, questionId });
+      if (!ctx) return;
+
       await stmts.deleteVotesForQuestion.run(questionId);
       await stmts.deleteQuestion.run(questionId);
 
-      const session = await stmts.getSessionBySlug.get(slug);
-      if (!session) return;
-      await broadcastQuestions(slug, session.id);
+      await broadcastQuestions(slug, ctx.session.id);
     } catch (err) {
       console.error('Error in delete-question:', err);
     }
   });
+});
+
+// Ugyldig payload (f.eks. null) kaster i destructuring før try/catch. Ikke la det ta ned serveren.
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled rejection:', err);
 });
 
 // --- Startup ---

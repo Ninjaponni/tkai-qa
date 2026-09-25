@@ -99,7 +99,7 @@
 
       const session = await res.json();
       localStorage.setItem('tkai-last-session', JSON.stringify({ slug: session.slug }));
-      window.location.href = `/s/${session.slug}/speaker`;
+      window.location.href = `/s/${session.slug}/speaker?k=${encodeURIComponent(session.admin_key)}`;
     });
   </script>
   <script src="/js/version.js"></script>

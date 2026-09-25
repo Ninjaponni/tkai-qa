@@ -27,7 +27,7 @@ function makeAll(sql) {
 // Prepared statements — samme nøkler som før, nå async
 const stmts = {
   createSession: { run: makeRun(
-    'INSERT INTO sessions (slug, title, speaker, speaker_image) VALUES (?, ?, ?, ?)'
+    'INSERT INTO sessions (slug, title, speaker, speaker_image, admin_key) VALUES (?, ?, ?, ?, ?)'
   )},
   getSessionBySlug: { get: makeGet(
     'SELECT * FROM sessions WHERE slug = ?'
@@ -133,6 +133,13 @@ async function initDb() {
   // Migrasjon: legg til visitor_id hvis den mangler
   try {
     await client.execute('ALTER TABLE questions ADD COLUMN visitor_id TEXT');
+  } catch (e) {
+    // Kolonnen finnes allerede
+  }
+
+  // Migrasjon: adminnøkkel for speaker-handlinger (NULL for gamle sesjoner)
+  try {
+    await client.execute('ALTER TABLE sessions ADD COLUMN admin_key TEXT');
   } catch (e) {
     // Kolonnen finnes allerede
   }
