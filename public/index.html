@@ -28,6 +28,11 @@
                pattern="[Tt][Kk][Aa][Ii]-[0-9]+" title="Skriv som tkai-7, tkai-8 osv.">
         <datalist id="event-options"></datalist>
 
+        <div id="organizer-field" style="display:none;">
+          <label for="organizer-key">Arrangørkode</label>
+          <input type="password" id="organizer-key" placeholder="Kreves for TKAI-arrangement" maxlength="200" autocomplete="off">
+        </div>
+
         <div class="image-upload">
           <label>Profilbilde (valgfritt)</label>
           <div class="image-upload-area">
@@ -52,6 +57,17 @@
     const imageInput = document.getElementById('image-input');
     const imagePreview = document.getElementById('image-preview');
     let speakerImageBase64 = null;
+
+    // Arrangørkoden huskes på denne enheten. Feltet vises bare når et arrangement er fylt inn.
+    const ORGANIZER_STORAGE = 'tkai-organizer-key';
+    const eventInput = document.getElementById('event-slug');
+    const organizerField = document.getElementById('organizer-field');
+    const organizerInput = document.getElementById('organizer-key');
+    try { organizerInput.value = localStorage.getItem(ORGANIZER_STORAGE) || ''; } catch (e) {}
+    function toggleOrganizerField() {
+      organizerField.style.display = eventInput.value.trim() ? '' : 'none';
+    }
+    eventInput.addEventListener('input', toggleOrganizerField);
 
     // Fyll nedtrekkslisten med TKAI-arrangementer. Tom liste = bare fritekst.
     fetch('/api/events')
@@ -99,6 +115,7 @@
       const title = document.getElementById('title').value.trim();
       const speaker = document.getElementById('speaker').value.trim();
       const eventSlug = document.getElementById('event-slug').value.trim().toLowerCase();
+      const organizerKey = eventSlug ? organizerInput.value.trim() : '';
 
       const btn = form.querySelector('button[type="submit"]');
       btn.disabled = true;
@@ -107,7 +124,7 @@
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, speaker, speakerImage: speakerImageBase64, eventSlug }),
+        body: JSON.stringify({ title, speaker, speakerImage: speakerImageBase64, eventSlug, organizerKey }),
       });
 
       if (!res.ok) {
@@ -119,6 +136,16 @@
       }
 
       const session = await res.json();
+      try {
+        if (session.organizer_rejected) {
+          localStorage.removeItem(ORGANIZER_STORAGE);
+        } else if (session.event_slug && organizerKey) {
+          localStorage.setItem(ORGANIZER_STORAGE, organizerKey);
+        }
+      } catch (e) {}
+      if (session.organizer_rejected) {
+        alert('Feil arrangørkode. Sesjonen er laget, men uten kobling til TKAI-arrangement.');
+      }
       localStorage.setItem('tkai-last-session', JSON.stringify({ slug: session.slug }));
       window.location.href = `/s/${session.slug}/speaker?k=${encodeURIComponent(session.admin_key)}`;
     });

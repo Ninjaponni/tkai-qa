@@ -47,9 +47,31 @@ function setLiveState(live) {
   liveBtn.title = isLive ? 'Klikk for å fjerne live-markeringen' : 'Send qa.tkai.no/live hit';
 }
 
-function toggleLive() {
-  socket.emit('set-live', { slug, key: adminKey, live: !isLive });
+// Arrangørkoden deles med landingssiden (samme localStorage på denne enheten).
+// Mangler den, spør vi én gang og husker svaret.
+const ORGANIZER_STORAGE = 'tkai-organizer-key';
+function getOrganizerKey() {
+  let code = null;
+  try { code = localStorage.getItem(ORGANIZER_STORAGE); } catch (e) {}
+  if (!code) {
+    code = (prompt('Arrangørkode for å sette sesjonen live:') || '').trim();
+    if (code) {
+      try { localStorage.setItem(ORGANIZER_STORAGE, code); } catch (e) {}
+    }
+  }
+  return code;
 }
+
+function toggleLive() {
+  const organizerKey = getOrganizerKey();
+  if (!organizerKey) return;
+  socket.emit('set-live', { slug, key: adminKey, organizerKey, live: !isLive });
+}
+
+// Feil kode: glem den, så vi spør på nytt neste gang
+socket.on('organizer-rejected', () => {
+  try { localStorage.removeItem(ORGANIZER_STORAGE); } catch (e) {}
+});
 
 // Load session
 async function loadSession() {

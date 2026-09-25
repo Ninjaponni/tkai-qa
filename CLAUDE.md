@@ -50,7 +50,7 @@ All state changes go through Socket.io events. After any mutation, `broadcastQue
 
 Turso hosted SQLite via `@libsql/client`. Four tables: `sessions`, `questions`, `votes`, `counters`. Schema defined in `db.js` with `CREATE TABLE IF NOT EXISTS`, initialized via async `initDb()`.
 
-**Environment variables:** `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` (set in Render). Falls back to local `file:tkai.db` without env vars.
+**Environment variables:** `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` and `TKAI_ORGANIZER_KEY` (set in Render). `EVENTS_URL` optionally overrides the tkai.no events.json source (testing). Falls back to local `file:tkai.db` without env vars.
 
 **All db calls are async** — `stmts` object wraps queries with `makeRun`/`makeGet`/`makeAll` helpers that return promises. Socket.io and Express handlers use `async/await` with try/catch.
 
@@ -61,7 +61,7 @@ try { await client.execute('ALTER TABLE questions ADD COLUMN visitor_id TEXT'); 
 
 **Session columns added in v1.8:** `admin_key` (32-char random, NULL for pre-1.8 sessions), `event_slug` (`^tkai-\d+$` or NULL), `is_live` + `live_at` (only one live per `event_slug`, set in one batch), `last_activity_at` (NULL = use `created_at`).
 
-**`tkai-0` is reserved for testing.** Use it for test sessions so they never end up in a real event's archive. It is filtered out of `/api/events` (`TEST_EVENT_SLUG` in `server.js`) and must also be excluded from the archive API (QA-V2 B1). Note: `/live` does *not* exclude it (so `/live` can be tested), so avoid leaving a `tkai-0` session newer than the real one on event night unless the real session is set live.
+**`tkai-0` is reserved for testing** (still requires the organizer code). Use it for test sessions so they never end up in a real event's archive. It is filtered out of `/api/events` (`TEST_EVENT_SLUG` in `server.js`) and must also be excluded from the archive API (QA-V2 B1). Note: `/live` does *not* exclude it (so `/live` can be tested), so avoid leaving a `tkai-0` session newer than the real one on event night unless the real session is set live.
 
 **Cleanup:** sessions *without* `event_slug` (and their questions) auto-delete after 24 hours. Sessions *with* `event_slug` are archived forever.
 
@@ -74,6 +74,8 @@ No login. Browser generates `visitor_id` (stored in localStorage), sent with soc
 **Raw `visitor_id` is never sent to clients.** `publicQuestion()` replaces it with `owner` (first 16 hex chars of sha256(visitor_id)) in every payload (`questions-updated`, `question-focused`). The audience joins with `{ slug, visitorId }` and the server replies `owner-hash`; the client treats questions with matching `owner` as its own. Hashing is server-side because `crypto.subtle` is unavailable on plain HTTP.
 
 **Speaker admin key:** `POST /api/sessions` generates `admin_key` and returns it to the creator only. `GET /api/sessions/:slug` never returns it (`publicSession()`). The landing page redirects to `/s/:slug/speaker?k=<key>`; `speaker.js` stores the key in localStorage (`tkai-admin-<slug>`) and strips `k` from the URL with `history.replaceState` (the speaker view is often projected). "Kopier speaker-lenke" gives the link with key.
+
+**Organizer code (`TKAI_ORGANIZER_KEY`):** a shared code for the TKAI organizers, checked server-side only. Required to create a session with `event_slug` (POST `organizerKey`; without a valid code the session is still created but *without* `event_slug`, and the response has `organizer_rejected: true`) and for `set-live` (both setting and removing live). This stops outsiders from hijacking `/live` or ending up in the archive. `event_slug` cannot be changed after creation. If the env var is unset, all organizer actions are rejected (fail closed). Wrong codes are rate-limited: max 10 failures per IP (first `x-forwarded-for` entry) per 15 min, in memory. The landing page shows an "Arrangørkode" field when an event is entered and remembers the code in localStorage (`tkai-organizer-key`), shared with the speaker page on the same device; the speaker page prompts for it if missing. The per-session speaker key alone is still enough for focus/answer/hide/delete, so speakers never need the organizer code.
 
 Speaker events (`focus-question`, `unfocus-question`, `answer-question`, `hide-question`, `delete-question`, `set-live`) send `key` and go through `getSpeakerContext()`, which rejects with `error-message` unless the key matches (timing-safe). Pre-1.8 sessions with `admin_key` NULL are allowed as before. Every handler taking `questionId` verifies the question belongs to the session for `slug`.
 

@@ -75,6 +75,49 @@ function rejectIfReadOnly(socket, session) {
   return true;
 }
 
+// --- Arrangørkode (TKAI_ORGANIZER_KEY i Render) ---
+// Kreves for å koble en sesjon til et arrangement (event_slug) og for "Sett som live",
+// slik at ingen utenfra kan kapre /live eller havne i arkivet. Mangler variabelen, avvises alt.
+const ORGANIZER_KEY = process.env.TKAI_ORGANIZER_KEY || '';
+if (!ORGANIZER_KEY) {
+  console.warn('TKAI_ORGANIZER_KEY er ikke satt: ingen kan koble sesjoner til arrangement eller sette live.');
+}
+
+// Enkel sperre mot gjetting: maks 10 feil forsøk per IP per 15 min
+const ORGANIZER_MAX_FAILS = 10;
+const ORGANIZER_WINDOW_MS = 15 * 60 * 1000;
+const organizerFails = new Map();
+
+// Render står bak en proxy; første adresse i x-forwarded-for er klienten
+function clientIp(headers, fallback) {
+  const fwd = headers['x-forwarded-for'];
+  return (typeof fwd === 'string' && fwd.split(',')[0].trim()) || fallback || 'ukjent';
+}
+
+function organizerKeyMatches(code) {
+  if (!ORGANIZER_KEY || typeof code !== 'string' || !code) return false;
+  // Sammenlign hasher, så lengden på koden ikke lekker
+  const a = crypto.createHash('sha256').update(ORGANIZER_KEY).digest();
+  const b = crypto.createHash('sha256').update(code).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+// Sjekker koden og teller feil forsøk. Sperret IP avvises selv med riktig kode.
+function checkOrganizer(ip, code) {
+  const now = Date.now();
+  let entry = organizerFails.get(ip);
+  if (entry && now > entry.resetAt) {
+    organizerFails.delete(ip);
+    entry = null;
+  }
+  if (entry && entry.count >= ORGANIZER_MAX_FAILS) return false;
+  if (organizerKeyMatches(code)) return true;
+  if (code) {
+    organizerFails.set(ip, { count: (entry ? entry.count : 0) + 1, resetAt: entry ? entry.resetAt : now + ORGANIZER_WINDOW_MS });
+  }
+  return false;
+}
+
 // Sesjon slik den kan vises offentlig (uten admin_key)
 function publicSession(session) {
   const { admin_key, ...rest } = session;
@@ -134,8 +177,8 @@ async function getSpeakerContext(socket, { slug, key, questionId }) {
 // Create a new session
 app.post('/api/sessions', async (req, res) => {
   try {
-    const { title, speaker, speakerImage } = req.body;
-    const eventSlug = typeof req.body.eventSlug === 'string' && req.body.eventSlug.trim()
+    const { title, speaker, speakerImage, organizerKey } = req.body;
+    let eventSlug = typeof req.body.eventSlug === 'string' && req.body.eventSlug.trim()
       ? req.body.eventSlug.trim().toLowerCase()
       : null;
     if (!title || !speaker) {
@@ -149,6 +192,13 @@ app.post('/api/sessions', async (req, res) => {
     }
     if (eventSlug && !EVENT_SLUG_RE.test(eventSlug)) {
       return res.status(400).json({ error: 'TKAI-arrangement må skrives som tkai-7, tkai-8 osv.' });
+    }
+
+    // Uten gyldig arrangørkode lages sesjonen uten kobling til arrangement
+    let organizerRejected = false;
+    if (eventSlug && !checkOrganizer(clientIp(req.headers, req.socket.remoteAddress), organizerKey)) {
+      eventSlug = null;
+      organizerRejected = true;
     }
 
     const base = title
@@ -166,7 +216,7 @@ app.post('/api/sessions', async (req, res) => {
         await stmts.incrementSessionCount.run();
         // Bare den som oppretter sesjonen får nøkkelen
         const session = await stmts.getSessionBySlug.get(slug);
-        return res.json(session);
+        return res.json({ ...session, organizer_rejected: organizerRejected });
       } catch (err) {
         if (attempt === 4) {
           return res.status(500).json({ error: 'Kunne ikke opprette sesjon.' });
@@ -462,14 +512,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  // "Sett som live": krever nøkkel og at sesjonen er koblet til et arrangement
-  socket.on('set-live', async ({ slug, key, live }) => {
+  // "Sett som live" (og fjerne live): krever sesjonens nøkkel, arrangørkode og at sesjonen er koblet til et arrangement
+  socket.on('set-live', async ({ slug, key, organizerKey, live }) => {
     try {
       const ctx = await getSpeakerContext(socket, { slug, key });
       if (!ctx) return;
       const { session } = ctx;
       if (!session.event_slug) {
         socket.emit('error-message', 'Bare sesjoner koblet til et TKAI-arrangement kan settes live.');
+        return;
+      }
+      if (!checkOrganizer(clientIp(socket.handshake.headers, socket.handshake.address), organizerKey)) {
+        socket.emit('organizer-rejected');
+        socket.emit('error-message', 'Feil arrangørkode. Bare arrangørene kan sette en sesjon live.');
         return;
       }
 
