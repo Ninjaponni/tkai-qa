@@ -27,7 +27,7 @@ function makeAll(sql) {
 // Prepared statements — samme nøkler som før, nå async
 const stmts = {
   createSession: { run: makeRun(
-    'INSERT INTO sessions (slug, title, speaker, speaker_image, admin_key) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO sessions (slug, title, speaker, speaker_image, admin_key, event_slug) VALUES (?, ?, ?, ?, ?, ?)'
   )},
   getSessionBySlug: { get: makeGet(
     'SELECT * FROM sessions WHERE slug = ?'
@@ -69,11 +69,12 @@ const stmts = {
   deleteVotesForQuestion: { run: makeRun(
     'DELETE FROM votes WHERE question_id = ?'
   )},
+  // Sesjoner koblet til et TKAI-arrangement (event_slug) arkiveres og slettes aldri
   deleteOldSessions: { run: makeRun(
-    `DELETE FROM sessions WHERE created_at < datetime('now', '-24 hours')`
+    `DELETE FROM sessions WHERE event_slug IS NULL AND created_at < datetime('now', '-24 hours')`
   )},
   getOldSessionIds: { all: makeAll(
-    `SELECT id FROM sessions WHERE created_at < datetime('now', '-24 hours')`
+    `SELECT id FROM sessions WHERE event_slug IS NULL AND created_at < datetime('now', '-24 hours')`
   )},
   deleteQuestionsBySession: { run: makeRun(
     'DELETE FROM questions WHERE session_id = ?'
@@ -143,6 +144,14 @@ async function initDb() {
   } catch (e) {
     // Kolonnen finnes allerede
   }
+
+  // Migrasjon: kobling til TKAI-arrangement, f.eks. 'tkai-7' (NULL = vanlig sesjon)
+  try {
+    await client.execute('ALTER TABLE sessions ADD COLUMN event_slug TEXT');
+  } catch (e) {
+    // Kolonnen finnes allerede
+  }
+  await client.execute('CREATE INDEX IF NOT EXISTS idx_sessions_event ON sessions(event_slug)');
 
   // Persistent teller for totalt antall sesjoner
   await client.execute(`

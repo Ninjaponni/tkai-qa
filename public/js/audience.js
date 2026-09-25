@@ -37,6 +37,8 @@ const errorMessage = document.getElementById('error-message');
 const focusedSection = document.getElementById('focused-section');
 const focusedText = document.getElementById('focused-text');
 const focusedAuthor = document.getElementById('focused-author');
+const readOnlyNotice = document.getElementById('read-only-notice');
+let readOnly = false;
 
 // Load session info
 async function loadSession() {
@@ -54,6 +56,14 @@ async function loadSession() {
   if (session.speaker_image) {
     speakerAvatar.src = session.speaker_image;
     speakerAvatar.style.display = 'block';
+  }
+
+  // Arkivert TKAI-sesjon eldre enn 24 t: bare lesing
+  if (session.read_only) {
+    readOnly = true;
+    questionForm.style.display = 'none';
+    readOnlyNotice.style.display = 'block';
+    if (lastQuestions) renderQuestions(lastQuestions);
   }
 }
 
@@ -152,14 +162,14 @@ function renderQuestions(questions) {
           <span class="question-time">${timeAgo(q.created_at)}</span>
         </p>
       </div>
-      <button class="upvote-btn ${hasVoted ? 'upvoted' : ''}" data-id="${q.id}" ${hasVoted ? 'disabled' : ''}>
+      <button class="upvote-btn ${hasVoted ? 'upvoted' : ''}" data-id="${q.id}" ${hasVoted || readOnly ? 'disabled' : ''}>
         <span class="upvote-icon">&#9650;</span>
         <span class="upvote-count">${q.upvotes}</span>
       </button>
     `;
 
     // Wrap own questions in swipe container
-    if (isOwn && q.status === 'active') {
+    if (isOwn && q.status === 'active' && !readOnly) {
       const wrapper = document.createElement('div');
       wrapper.className = 'swipe-wrapper';
       wrapper.innerHTML = `

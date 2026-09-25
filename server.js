@@ -16,7 +16,7 @@ const io = new Server(server);
 app.use(express.json({ limit: '5mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Auto-cleanup: delete sessions older than 24 hours ---
+// --- Auto-cleanup: delete sessions older than 24 hours (unntatt arkiverte TKAI-sesjoner) ---
 async function cleanupOldSessions() {
   try {
     const old = await stmts.getOldSessionIds.all();
@@ -43,10 +43,30 @@ function keyMatches(session, key) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+// --- Arkiverte TKAI-sesjoner ---
+const EVENT_SLUG_RE = /^tkai-\d+$/;
+const ARCHIVE_READ_ONLY_MS = 24 * 60 * 60 * 1000;
+
+// created_at er UTC på formen 'YYYY-MM-DD HH:MM:SS'
+function sessionAgeMs(session) {
+  return Date.now() - new Date(session.created_at.replace(' ', 'T') + 'Z').getTime();
+}
+
+// Arkiverte sesjoner eldre enn 24 t: publikum kan lese, men ikke skrive eller stemme
+function isReadOnly(session) {
+  return Boolean(session.event_slug) && sessionAgeMs(session) > ARCHIVE_READ_ONLY_MS;
+}
+
+function rejectIfReadOnly(socket, session) {
+  if (!isReadOnly(session)) return false;
+  socket.emit('error-message', 'Denne Q&A-en er avsluttet. Spørsmålene kan leses, men ikke endres.');
+  return true;
+}
+
 // Sesjon slik den kan vises offentlig (uten admin_key)
 function publicSession(session) {
   const { admin_key, ...rest } = session;
-  return rest;
+  return { ...rest, read_only: isReadOnly(session) };
 }
 
 // Speakere med gyldig nøkkel ligger i et eget rom og får også skjulte spørsmål
@@ -92,6 +112,9 @@ async function getSpeakerContext(socket, { slug, key, questionId }) {
 app.post('/api/sessions', async (req, res) => {
   try {
     const { title, speaker, speakerImage } = req.body;
+    const eventSlug = typeof req.body.eventSlug === 'string' && req.body.eventSlug.trim()
+      ? req.body.eventSlug.trim().toLowerCase()
+      : null;
     if (!title || !speaker) {
       return res.status(400).json({ error: 'Tittel og foredragsholder er påkrevd.' });
     }
@@ -100,6 +123,9 @@ app.post('/api/sessions', async (req, res) => {
     }
     if (speaker.length > 80) {
       return res.status(400).json({ error: 'Navnet kan ikke være lengre enn 80 tegn.' });
+    }
+    if (eventSlug && !EVENT_SLUG_RE.test(eventSlug)) {
+      return res.status(400).json({ error: 'TKAI-arrangement må skrives som tkai-7, tkai-8 osv.' });
     }
 
     const base = title
@@ -113,7 +139,7 @@ app.post('/api/sessions', async (req, res) => {
       const suffix = uuidv4().slice(0, 6 + attempt);
       const slug = `${base}-${suffix}`;
       try {
-        await stmts.createSession.run(slug, title, speaker, speakerImage || null, generateAdminKey());
+        await stmts.createSession.run(slug, title, speaker, speakerImage || null, generateAdminKey(), eventSlug);
         await stmts.incrementSessionCount.run();
         // Bare den som oppretter sesjonen får nøkkelen
         const session = await stmts.getSessionBySlug.get(slug);
@@ -142,6 +168,32 @@ app.get('/api/sessions/:slug', async (req, res) => {
     console.error('Error getting session:', err);
     res.status(500).json({ error: 'Serverfeil.' });
   }
+});
+
+// Kommende/nylige TKAI-arrangementer til nedtrekkslisten på landingssiden.
+// Hentes fra tkai.no på serveren (unngår CORS) og mellomlagres i 10 min. Tom liste ved feil.
+const EVENTS_URL = 'https://tkai.no/events.json';
+let eventsCache = { at: 0, data: [] };
+
+app.get('/api/events', async (req, res) => {
+  if (Date.now() - eventsCache.at < 10 * 60 * 1000) {
+    return res.json(eventsCache.data);
+  }
+  let data = [];
+  try {
+    const r = await fetch(EVENTS_URL, { signal: AbortSignal.timeout(3000) });
+    if (r.ok) {
+      const json = await r.json();
+      const list = Array.isArray(json) ? json : (json && json.events) || [];
+      data = list
+        .filter(e => e && typeof e.slug === 'string' && EVENT_SLUG_RE.test(e.slug))
+        .map(e => ({ slug: e.slug, number: e.number ?? null, title: e.title ?? null, date: e.date ?? null }));
+    }
+  } catch (err) {
+    // tkai.no utilgjengelig eller filen finnes ikke ennå: landingssiden faller tilbake til fritekst
+  }
+  eventsCache = { at: Date.now(), data };
+  res.json(data);
 });
 
 // Stats – total sessions ever created
@@ -201,6 +253,7 @@ io.on('connection', (socket) => {
     try {
       const session = await stmts.getSessionBySlug.get(slug);
       if (!session) return;
+      if (rejectIfReadOnly(socket, session)) return;
 
       if (!text || text.trim().length === 0) {
         socket.emit('error-message', 'Spørsmålet kan ikke være tomt.');
@@ -232,6 +285,7 @@ io.on('connection', (socket) => {
     try {
       const ctx = await getSessionAndQuestion(slug, questionId);
       if (!ctx) return;
+      if (rejectIfReadOnly(socket, ctx.session)) return;
 
       const already = await stmts.hasVoted.get(questionId, visitorId);
       if (already) {
@@ -309,6 +363,7 @@ io.on('connection', (socket) => {
     try {
       const ctx = await getSessionAndQuestion(slug, questionId);
       if (!ctx) return;
+      if (rejectIfReadOnly(socket, ctx.session)) return;
       const { question } = ctx;
 
       if (!visitorId || question.visitor_id !== visitorId) {
@@ -346,6 +401,7 @@ io.on('connection', (socket) => {
     try {
       const ctx = await getSessionAndQuestion(slug, questionId);
       if (!ctx) return;
+      if (rejectIfReadOnly(socket, ctx.session)) return;
 
       if (!visitorId || ctx.question.visitor_id !== visitorId) {
         socket.emit('error-message', 'Du kan bare slette dine egne spørsmål.');

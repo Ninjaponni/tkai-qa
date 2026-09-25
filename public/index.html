@@ -23,6 +23,11 @@
         <label for="speaker">Foredragsholder</label>
         <input type="text" id="speaker" placeholder="Ditt navn" required maxlength="80">
 
+        <label for="event-slug">TKAI-arrangement (valgfritt)</label>
+        <input type="text" id="event-slug" list="event-options" placeholder="f.eks. tkai-7" maxlength="20" autocomplete="off"
+               pattern="[Tt][Kk][Aa][Ii]-[0-9]+" title="Skriv som tkai-7, tkai-8 osv.">
+        <datalist id="event-options"></datalist>
+
         <div class="image-upload">
           <label>Profilbilde (valgfritt)</label>
           <div class="image-upload-area">
@@ -47,6 +52,20 @@
     const imageInput = document.getElementById('image-input');
     const imagePreview = document.getElementById('image-preview');
     let speakerImageBase64 = null;
+
+    // Fyll nedtrekkslisten med TKAI-arrangementer. Tom liste = bare fritekst.
+    fetch('/api/events')
+      .then(r => r.json())
+      .then(events => {
+        const list = document.getElementById('event-options');
+        events.forEach(ev => {
+          const opt = document.createElement('option');
+          opt.value = ev.slug;
+          opt.label = [ev.number ? `TKAI #${ev.number}` : null, ev.title, ev.date].filter(Boolean).join(' · ');
+          list.appendChild(opt);
+        });
+      })
+      .catch(() => {});
 
     // Resize image to max 256x256 before upload
     function resizeImage(file, maxSize) {
@@ -79,6 +98,7 @@
       e.preventDefault();
       const title = document.getElementById('title').value.trim();
       const speaker = document.getElementById('speaker').value.trim();
+      const eventSlug = document.getElementById('event-slug').value.trim().toLowerCase();
 
       const btn = form.querySelector('button[type="submit"]');
       btn.disabled = true;
@@ -87,11 +107,12 @@
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, speaker, speakerImage: speakerImageBase64 }),
+        body: JSON.stringify({ title, speaker, speakerImage: speakerImageBase64, eventSlug }),
       });
 
       if (!res.ok) {
-        alert('Noe gikk galt. Prøv igjen.');
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Noe gikk galt. Prøv igjen.');
         btn.disabled = false;
         btn.textContent = 'Opprett sesjon';
         return;
