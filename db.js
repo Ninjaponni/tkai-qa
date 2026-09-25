@@ -79,6 +79,28 @@ const stmts = {
   deleteQuestionsBySession: { run: makeRun(
     'DELETE FROM questions WHERE session_id = ?'
   )},
+  // /live: sesjonen som er satt live siste 12 t, ellers nyeste TKAI-sesjon siste 12 t
+  getLiveSession: { get: makeGet(
+    `SELECT slug FROM sessions
+     WHERE is_live = 1 AND event_slug IS NOT NULL AND live_at > datetime('now', '-12 hours')
+     ORDER BY live_at DESC LIMIT 1`
+  )},
+  getLatestEventSession: { get: makeGet(
+    `SELECT slug FROM sessions
+     WHERE event_slug IS NOT NULL AND created_at > datetime('now', '-12 hours')
+     ORDER BY created_at DESC, id DESC LIMIT 1`
+  )},
+  getOtherLiveSlugs: { all: makeAll(
+    `SELECT slug FROM sessions WHERE event_slug = ? AND is_live = 1 AND id != ?`
+  )},
+  // Bare én live-sesjon per arrangement: nullstill de andre og sett denne i samme transaksjon
+  setLive: { run: async (sessionId, eventSlug) => client.batch([
+    { sql: 'UPDATE sessions SET is_live = 0 WHERE event_slug = ? AND id != ?', args: [eventSlug, sessionId] },
+    { sql: `UPDATE sessions SET is_live = 1, live_at = datetime('now') WHERE id = ?`, args: [sessionId] },
+  ], 'write') },
+  unsetLive: { run: makeRun(
+    'UPDATE sessions SET is_live = 0 WHERE id = ?'
+  )},
   getSessionCount: { get: makeGet(
     `SELECT value FROM counters WHERE key = 'total_sessions'`
   )},
@@ -152,6 +174,18 @@ async function initDb() {
     // Kolonnen finnes allerede
   }
   await client.execute('CREATE INDEX IF NOT EXISTS idx_sessions_event ON sessions(event_slug)');
+
+  // Migrasjon: hvilken sesjon /live peker på ("Sett som live" i speaker-visningen)
+  try {
+    await client.execute('ALTER TABLE sessions ADD COLUMN is_live INTEGER DEFAULT 0');
+  } catch (e) {
+    // Kolonnen finnes allerede
+  }
+  try {
+    await client.execute('ALTER TABLE sessions ADD COLUMN live_at TEXT');
+  } catch (e) {
+    // Kolonnen finnes allerede
+  }
 
   // Persistent teller for totalt antall sesjoner
   await client.execute(`

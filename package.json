@@ -4,7 +4,8 @@
   "description": "Enkel Q&A-tjeneste for meetup-events",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "qr": "node scripts/make-qr.js"
   },
   "dependencies": {
     "@libsql/client": "^0.17.2",
@@ -12,5 +13,8 @@
     "express": "^4.21.1",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "qrcode": "^1.5.4"
   }
 }

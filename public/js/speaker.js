@@ -35,6 +35,21 @@ const focusQuestionText = document.getElementById('focus-question-text');
 const focusMeta = document.getElementById('focus-meta');
 const unfocusBtn = document.getElementById('unfocus-btn');
 const answerBtn = document.getElementById('answer-btn');
+const liveBtn = document.getElementById('live-btn');
+let isLive = false;
+let speakerDenied = false;
+
+// qa.tkai.no/live peker på sesjonen som er satt live
+function setLiveState(live) {
+  isLive = Boolean(live);
+  liveBtn.textContent = isLive ? '● Live på /live' : 'Sett som live';
+  liveBtn.classList.toggle('btn-live', isLive);
+  liveBtn.title = isLive ? 'Klikk for å fjerne live-markeringen' : 'Send qa.tkai.no/live hit';
+}
+
+function toggleLive() {
+  socket.emit('set-live', { slug, key: adminKey, live: !isLive });
+}
 
 // Load session
 async function loadSession() {
@@ -51,6 +66,12 @@ async function loadSession() {
   if (session.speaker_image) {
     speakerAvatar.src = session.speaker_image;
     speakerAvatar.style.display = 'block';
+  }
+
+  // "Sett som live" gjelder bare sesjoner koblet til et TKAI-arrangement
+  if (session.event_slug && !speakerDenied) {
+    liveBtn.style.display = '';
+    setLiveState(session.live);
   }
 
   // Generate QR code for audience URL
@@ -244,7 +265,12 @@ socket.on('connect', () => {
 });
 
 // Uten gyldig nøkkel får siden bare se det publikum ser
+socket.on('live-changed', ({ live }) => setLiveState(live));
+
 socket.on('speaker-denied', () => {
+  speakerDenied = true;
+  document.body.classList.add('speaker-no-key');
+  liveBtn.style.display = 'none';
   showSpeakerWarning('Denne lenken mangler gyldig adminnøkkel. Du kan se spørsmålene, men ikke styre dem. Be den som opprettet sesjonen om speaker-lenken.');
   document.getElementById('copy-speaker-btn').style.display = 'none';
 });

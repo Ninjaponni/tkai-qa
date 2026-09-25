@@ -57,6 +57,13 @@ function isReadOnly(session) {
   return Boolean(session.event_slug) && sessionAgeMs(session) > ARCHIVE_READ_ONLY_MS;
 }
 
+// Live-markeringen gjelder i 12 t, slik at en glemt markering ikke overstyrer neste arrangement
+const LIVE_MS = 12 * 60 * 60 * 1000;
+function isLiveNow(session) {
+  if (!session.is_live || !session.live_at) return false;
+  return Date.now() - new Date(session.live_at.replace(' ', 'T') + 'Z').getTime() < LIVE_MS;
+}
+
 function rejectIfReadOnly(socket, session) {
   if (!isReadOnly(session)) return false;
   socket.emit('error-message', 'Denne Q&A-en er avsluttet. Spørsmålene kan leses, men ikke endres.');
@@ -66,7 +73,7 @@ function rejectIfReadOnly(socket, session) {
 // Sesjon slik den kan vises offentlig (uten admin_key)
 function publicSession(session) {
   const { admin_key, ...rest } = session;
-  return { ...rest, read_only: isReadOnly(session) };
+  return { ...rest, read_only: isReadOnly(session), live: isLiveNow(session) };
 }
 
 // Speakere med gyldig nøkkel ligger i et eget rom og får også skjulte spørsmål
@@ -210,6 +217,21 @@ app.get('/api/stats', async (req, res) => {
 // Generate a nickname
 app.get('/api/nickname', (req, res) => {
   res.json({ nickname: generateNickname() });
+});
+
+// Fast QR-adresse: sender publikum til sesjonen som er live nå
+app.get('/live', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const session = await stmts.getLiveSession.get() || await stmts.getLatestEventSession.get();
+    if (session) {
+      return res.redirect(302, `/s/${encodeURIComponent(session.slug)}`);
+    }
+    res.sendFile(path.join(__dirname, 'public', 'live-empty.html'));
+  } catch (err) {
+    console.error('Error in /live:', err);
+    res.status(500).sendFile(path.join(__dirname, 'public', 'live-empty.html'));
+  }
 });
 
 // Serve audience page
@@ -415,6 +437,30 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Error in delete-own-question:', err);
       socket.emit('error-message', 'Noe gikk galt. Prøv igjen.');
+    }
+  });
+
+  // "Sett som live": krever nøkkel og at sesjonen er koblet til et arrangement
+  socket.on('set-live', async ({ slug, key, live }) => {
+    try {
+      const ctx = await getSpeakerContext(socket, { slug, key });
+      if (!ctx) return;
+      const { session } = ctx;
+      if (!session.event_slug) {
+        socket.emit('error-message', 'Bare sesjoner koblet til et TKAI-arrangement kan settes live.');
+        return;
+      }
+
+      if (live) {
+        const others = await stmts.getOtherLiveSlugs.all(session.event_slug, session.id);
+        await stmts.setLive.run(session.id, session.event_slug);
+        others.forEach(o => io.to(speakerRoom(o.slug)).emit('live-changed', { live: false }));
+      } else {
+        await stmts.unsetLive.run(session.id);
+      }
+      io.to(speakerRoom(slug)).emit('live-changed', { live: Boolean(live) });
+    } catch (err) {
+      console.error('Error in set-live:', err);
     }
   });
 

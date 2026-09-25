@@ -1029,3 +1029,16 @@ textarea {
   text-align: center;
   padding: 8px 0;
 }
+
+/* === "Sett som live" i speaker-visningen === */
+#live-btn.btn-live {
+  background: var(--success-dim);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+/* Speaker-side uten gyldig nøkkel: bare lesing */
+.speaker-no-key .question-actions,
+.speaker-no-key .focus-actions {
+  display: none;
+}
